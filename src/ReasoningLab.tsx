@@ -13,7 +13,6 @@ import {
   FileText,
   ImagePlus,
   Layers3,
-  LayoutDashboard,
   LockKeyhole,
   Eye,
   EyeOff,
@@ -212,12 +211,12 @@ function Panel({ children, className = '' }: { children: ReactNode; className?: 
   return <section className={`lab-panel ${className}`}>{children}</section>
 }
 
-function StageHeading({ eyebrow, title, copy }: { eyebrow: string; title: string; copy: string }) {
+function StageHeading({ eyebrow, title, copy, singleLine = false }: { eyebrow: string; title: string; copy: string; singleLine?: boolean }) {
   return (
-    <header className="lab-stage-heading mb-7 max-w-3xl">
+    <header className={`lab-stage-heading mb-7 ${singleLine ? 'lab-stage-heading-single' : ''}`}>
       <p className="mb-2 text-[11px] font-semibold tracking-[.22em] text-[#f2ca94]">{eyebrow}</p>
       <h1 className="text-2xl font-semibold tracking-[-.03em] text-white sm:text-3xl">{title}</h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{copy}</p>
+      <p className="lab-stage-copy mt-3 text-sm leading-6 text-white/70">{copy}</p>
     </header>
   )
 }
@@ -429,7 +428,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const content = (() => {
     if (lab.step === 0) return (
       <>
-        <StageHeading eyebrow="01 / CREATIVE BASELINE" title="建立创作基线" copy="导入故事、互动规则与体验规模，作为编剧部门和后续推演共同引用的起始版本。制作与场地限制将在空间阶段补充。" />
+        <StageHeading eyebrow="01 / CREATIVE BASELINE" title="建立创作基线" copy="导入故事、互动规则与体验规模，作为编剧部门和后续推演共同引用的起始版本。制作与场地限制将在空间阶段补充。" singleLine />
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} /></Panel>
           <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} /></Panel>
@@ -578,12 +577,11 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
 
   return (
     <main className="lab-shell min-h-[100svh] text-white">
-      <video className="lab-background-video" src="/dna-background.mp4" autoPlay loop muted playsInline preload="auto" aria-hidden="true" />
       <div className="lab-background-wash" aria-hidden="true" />
       <div className="lab-background-grid" aria-hidden="true" />
       <aside className="lab-sidebar">
         <button type="button" className="lab-back-button" onClick={onBack}><ArrowLeft size={16} />返回实验场</button>
-        <div className="mt-8 flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/50">AI REASONING LAB</p></div><button type="button" className="lab-settings-icon" aria-label="打开模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /></button></div>
+        <div className="mt-8 flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/50">AI REASONING LAB</p><span className={`lab-sidebar-model ${connection.state === 'connected' ? 'is-connected' : ''}`}><span />{connection.state === 'connected' ? 'DeepSeek 已保存' : '模型未连接'}</span></div><button type="button" className="lab-settings-icon" aria-label="打开模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /></button></div>
         <nav className="mt-8 grid grid-cols-3 gap-1 sm:grid-cols-6 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
@@ -591,7 +589,6 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       </aside>
 
       <section className="lab-workspace">
-        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><div className="flex items-center gap-2"><span className={`lab-connection-badge ${connection.state === 'connected' ? 'lab-connection-badge-active' : ''}`}><span />{connection.state === 'connected' ? 'DeepSeek 已保存' : '模型未连接'}</span><button type="button" className="lab-model-button" onClick={() => setSettingsOpen(true)}><Settings2 size={13} />模型设置</button></div></header>
         <div className="lab-content">{content}</div>
         <footer className="lab-footer">
           <button type="button" className="lab-secondary-button" disabled={lab.step === 0} onClick={() => go(Math.max(0, lab.step - 1))}><ArrowLeft size={15} />上一步</button>
