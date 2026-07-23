@@ -511,22 +511,26 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <div className="lab-input-top-grid">
           <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} placeholder="故事梗概或完整故事文档。" /></Panel>
           <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="行动方式、信息交换和结局条件。" /></Panel>
-          <Panel className="lab-duration-panel"><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} placeholder="90分钟" /></Panel>
         </div>
 
-        <Panel className="lab-role-strip mt-4">
-          <div className="lab-role-strip-title"><Users size={15} /><div><strong>角色设定</strong><span>人数与基本情况</span></div></div>
-          <label className="lab-role-count"><span>人数</span><input type="number" min="1" max="20" value={lab.inputs.people} onChange={event => updatePeople(event.target.value)} /></label>
-          <div className="lab-role-track">
-            {lab.inputs.characters.map((character, index) => (
-              <div className="lab-role-item" key={index}>
-                <span>角色 {index + 1}</span>
-                <input value={character.name} onChange={event => updateCharacter(index, 'name', event.target.value)} placeholder="名称" />
-                <textarea rows={2} value={character.profile} onChange={event => updateCharacter(index, 'profile', event.target.value)} placeholder="基本情况" />
-              </div>
-            ))}
-          </div>
-        </Panel>
+        <div className="lab-input-bottom-grid mt-4">
+          <Panel className="lab-role-strip">
+            <div className="lab-role-meta">
+              <div className="lab-role-strip-title"><Users size={15} /><strong>角色设定</strong></div>
+              <label className="lab-role-count"><span>人数</span><input type="number" min="1" max="20" value={lab.inputs.people} onChange={event => updatePeople(event.target.value)} /></label>
+            </div>
+            <div className="lab-role-track">
+              {lab.inputs.characters.map((character, index) => (
+                <div className="lab-role-item" key={index}>
+                  <span>角色 {index + 1}</span>
+                  <input value={character.name} onChange={event => updateCharacter(index, 'name', event.target.value)} placeholder="名称" />
+                  <textarea rows={2} value={character.profile} onChange={event => updateCharacter(index, 'profile', event.target.value)} placeholder="基本情况" />
+                </div>
+              ))}
+            </div>
+          </Panel>
+          <Panel className="lab-duration-panel"><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} placeholder="90分钟" /></Panel>
+        </div>
       </>
     )
 
