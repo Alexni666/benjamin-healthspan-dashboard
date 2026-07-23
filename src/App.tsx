@@ -11,7 +11,7 @@ const planImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a9
 const storageKey = 'healthspan-simple-editor:v1'
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'scale'
-type CardId = 'activities' | 'insights' | 'snapshot' | 'plan'
+type CardId = 'activities' | 'insights'
 type RegionId = 'side' | 'ageBottom' | 'pageBottom'
 type CardWidth = 'half' | 'full'
 type CardPlacement = { region: RegionId; width: CardWidth }
@@ -27,16 +27,12 @@ type Copy = {
   ageBadge: string
   activitiesTitle: string
   activitiesMeta: string
+  activitiesIntro: string
   activitiesBody: string
   insightsTitle: string
   insightsMeta: string
+  insightsIntro: string
   insightsBody: string
-  snapshotTitle: string
-  snapshotMeta: string
-  snapshotBody: string
-  planTitle: string
-  planMeta: string
-  planBody: string
 }
 
 type EditorData = {
@@ -58,32 +54,24 @@ const defaultCopy: Copy = {
   ageLabel: '正在孵化的实验方向',
   metric: '03',
   ageBadge: '从内容创意到可验证方案',
-  activitiesTitle: 'AI推理内容实验室',
-  activitiesMeta: '已开放',
-  activitiesBody: '从故事出发，生成剧情节点、人物任务、线索机关、场景布局，并进行多类型玩家模拟试玩。',
-  insightsTitle: 'AI游戏机制实验室',
-  insightsMeta: '规划中',
-  insightsBody: '生成和检查游戏机制，模拟不同玩家行为，提前发现规则漏洞、节奏失衡和执行风险。',
-  snapshotTitle: 'AI美食互动实验',
-  snapshotMeta: '概念验证',
-  snapshotBody: '探索用户挑战、AI初评、专业评审、直播互动与商业转化之间的新内容形式。',
-  planTitle: '实验档案与报告',
-  planMeta: '3项实验',
-  planBody: '记录每次实验的输入、生成方案、测试问题、修改过程和人工验证结果。',
+  activitiesTitle: 'AI内容推理实验室',
+  activitiesMeta: '开始实验',
+  activitiesIntro: '输入故事详情、游戏规则、人物数量和预计时长。',
+  activitiesBody: 'AI自动生成剧情节点、人物任务、线索机关、场景方向、平面布局和视觉方案，并模拟不同玩家进行试玩，输出风险与修改建议。',
+  insightsTitle: 'AI案例进化引擎',
+  insightsMeta: '进入引擎',
+  insightsIntro: '沉淀历史案件、试玩数据、修改过程和最终结论，逐步形成团队自己的内容经验库。',
+  insightsBody: '根据主题、人数、时长和场景等条件，生成新的案例创意，分析方案优势、潜在问题、相似风险与改进方向。',
 }
 
-const defaultOrder: CardId[] = ['activities', 'insights', 'snapshot', 'plan']
+const defaultOrder: CardId[] = ['activities', 'insights']
 const defaultLayout: Record<CardId, CardPlacement> = {
-  activities: { region: 'side', width: 'half' },
-  insights: { region: 'side', width: 'half' },
-  snapshot: { region: 'side', width: 'half' },
-  plan: { region: 'side', width: 'half' },
+  activities: { region: 'side', width: 'full' },
+  insights: { region: 'side', width: 'full' },
 }
 const cardLabels: Record<CardId, string> = {
-  activities: 'AI推理内容实验室',
-  insights: 'AI游戏机制实验室',
-  snapshot: 'AI美食互动实验',
-  plan: '实验档案与报告',
+  activities: 'AI内容推理实验室',
+  insights: 'AI案例进化引擎',
 }
 const regionLabels: Record<RegionId, string> = {
   side: '右侧',
@@ -94,18 +82,19 @@ const regionLabels: Record<RegionId, string> = {
 function loadEditorData(): EditorData {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || '{}') as Partial<EditorData>
-    const storedLayout = stored.layout || {} as Partial<Record<CardId, CardPlacement>>
+    const currentContent = stored.contentVersion === 4
+    const storedLayout = currentContent ? stored.layout || {} as Partial<Record<CardId, CardPlacement>> : {}
     return {
-      contentVersion: 3,
-      copy: stored.contentVersion === 3 ? { ...defaultCopy, ...(stored.copy || {}) } : defaultCopy,
+      contentVersion: 4,
+      copy: currentContent ? { ...defaultCopy, ...(stored.copy || {}) } : defaultCopy,
       logo: stored.logo && stored.logo !== legacyLogo ? stored.logo : defaultLogo,
       avatar: stored.avatar || defaultAvatar,
-      order: stored.order?.length === defaultOrder.length ? stored.order : defaultOrder,
-      hidden: stored.hidden || [],
+      order: currentContent && stored.order?.length === defaultOrder.length ? stored.order : defaultOrder,
+      hidden: currentContent ? stored.hidden || [] : [],
       layout: Object.fromEntries(defaultOrder.map(id => [id, { ...defaultLayout[id], ...(storedLayout[id] || {}) }])) as Record<CardId, CardPlacement>,
     }
   } catch {
-    return { contentVersion: 3, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout }
+    return { contentVersion: 4, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout }
   }
 }
 
@@ -252,7 +241,7 @@ export default function App() {
   }
 
   const exportEdits = () => {
-    const blob = new Blob([JSON.stringify({ version: 3, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ version: 4, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -264,7 +253,7 @@ export default function App() {
   const resetEdits = () => {
     if (!window.confirm('确定清除当前浏览器里的全部修改吗？')) return
     localStorage.removeItem(storageKey)
-    setData({ contentVersion: 3, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout })
+    setData({ contentVersion: 4, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout })
   }
 
   const cardControls = (id: CardId) => editing && (
@@ -276,26 +265,17 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} group flex min-h-[220px] w-full flex-col rounded-2xl bg-[#2F2F2F]/60 p-4 text-left backdrop-blur-[52px] transition-colors hover:bg-[#2F2F2F]/70 sm:rounded-[20px] sm:p-5`}>
+    if (id === 'activities') return <article className={`${shared} group flex min-h-[200px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(105deg, rgba(11,12,18,.82), rgba(33,15,10,.38)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
-      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-4 block text-xs leading-relaxed text-white/60" />
-      <span className="mt-auto flex items-end justify-between pt-5"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] text-white/70 sm:text-xs" /><ArrowButton dark label="查看 AI 推理内容实验" /></span>
+      <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
+      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-2 block max-w-[92%] text-xs leading-relaxed text-white/65" />
+      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始 AI 内容推理实验" /></span>
     </article>
-    if (id === 'insights') return <article className={`${shared} group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(rgba(0,0,0,.24), rgba(0,0,0,.38)), url(${insightsImage})` }}>
+    return <article className={`${shared} group flex min-h-[200px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(105deg, rgba(11,12,18,.78), rgba(49,18,9,.34)), url(${planImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
-      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-4 block text-xs leading-relaxed text-white/80" />
-      <span className="mt-auto flex items-end justify-between pt-5"><EditableText value={data.copy.insightsMeta} editing={editing} onChange={value => setCopy('insightsMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="查看 AI 游戏机制实验" /></span>
-    </article>
-    if (id === 'snapshot') return <article className={`${shared} group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-white p-4 text-left text-black backdrop-blur-[52px] transition-transform hover:-translate-y-0.5 sm:rounded-[20px] sm:p-5`}>
-      {cardControls(id)}
-      <EditableText value={data.copy.snapshotTitle} editing={editing} onChange={value => setCopy('snapshotTitle', value)} className="block pr-12 text-base font-semibold sm:text-lg" />
-      <EditableText value={data.copy.snapshotBody} editing={editing} onChange={value => setCopy('snapshotBody', value)} multiline className="mt-4 block text-xs leading-relaxed text-black/60" />
-      <span className="mt-auto flex items-end justify-between pt-5"><EditableText value={data.copy.snapshotMeta} editing={editing} onChange={value => setCopy('snapshotMeta', value)} className="rounded-full bg-black px-3 py-1.5 text-xs font-medium text-white" /><ArrowButton dark label="查看 AI 美食互动实验" /></span>
-    </article>
-    return <article className={`${shared} group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(rgba(0,0,0,.22), rgba(0,0,0,.42)), url(${planImage})` }}>
-      {cardControls(id)}<EditableText value={data.copy.planTitle} editing={editing} onChange={value => setCopy('planTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
-      <EditableText value={data.copy.planBody} editing={editing} onChange={value => setCopy('planBody', value)} multiline className="mt-4 block text-xs leading-relaxed text-white/80" />
-      <span className="mt-auto flex items-end justify-between pt-5"><EditableText value={data.copy.planMeta} editing={editing} onChange={value => setCopy('planMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="查看实验档案与报告" /></span>
+      <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
+      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-2 block max-w-[92%] text-xs leading-relaxed text-white/65" />
+      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.insightsMeta} editing={editing} onChange={value => setCopy('insightsMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="进入 AI 案例进化引擎" /></span>
     </article>
   }
 
@@ -311,7 +291,7 @@ export default function App() {
       >
         {editing && <span className="region-label">{regionLabels[region]}</span>}
         {cards.map((id, index) => (
-          <AnimatedElement direction="left" delay={500 + index * 120} className={`${data.layout[id].width === 'full' ? 'sm:col-span-2' : ''} ${id === 'snapshot' ? 'relative z-20' : ''}`} key={id}>
+          <AnimatedElement direction="left" delay={500 + index * 120} className={data.layout[id].width === 'full' ? 'sm:col-span-2' : ''} key={id}>
             <div
               draggable={editing}
               onDragStart={() => setDraggedCard(id)}
@@ -361,17 +341,17 @@ export default function App() {
         </nav>
       </AnimatedElement>
 
-      <div className="relative z-[5] px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:pt-12">
-        <div className="flex flex-col gap-10 xl:min-h-[calc(100svh-126px)] xl:flex-row xl:items-end xl:justify-between">
+      <div className="relative z-[5] px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:pb-4 xl:pt-4">
+        <div className="flex flex-col gap-10 xl:min-h-[calc(100svh-136px)] xl:flex-row xl:items-end xl:justify-between">
           <section className="w-full sm:w-[520px] lg:w-[620px]" aria-labelledby="age-title">
-            <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px]">
+            <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px] xl:h-[520px]">
               <div className="animate-spin-bg absolute inset-[-5%] bg-cover bg-center" style={{ backgroundImage: `url(${ageTexture})` }} /><div className="age-glow absolute inset-0" />
               <div className="relative z-10 flex max-w-[82%] flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]"><EditableText value={data.copy.metric} editing={editing} onChange={value => setCopy('metric', value)} /></strong></AnimatedElement></div>
             </div></AnimatedElement>
             <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="max-w-full rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-center text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
             {renderRegion('ageBottom', 'mt-6')}
           </section>
-          {renderRegion('side', 'w-full xl:w-[540px]')}
+          {renderRegion('side', 'w-full xl:w-[620px] xl:max-w-[52vw]')}
         </div>
         {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>
