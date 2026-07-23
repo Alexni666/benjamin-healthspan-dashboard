@@ -6,8 +6,6 @@ const legacyLogo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8f
 const defaultLogo = ''
 const defaultAvatar = 'https://polo-pecan-73837341.figma.site/_assets/v11/745de561b3ebfa8634a3483efc95f21feedd96c9.png'
 const ageTexture = 'https://polo-pecan-73837341.figma.site/_assets/v11/d8d9bd498347ea96ca4d675a624c8d90e06786e7.png'
-const insightsImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png'
-const planImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a933b0da384a5a3f8b0d9986bb919838.png'
 const storageKey = 'healthspan-simple-editor:v1'
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'scale'
@@ -157,11 +155,11 @@ function ArrowButton({ dark = false, label }: { dark?: boolean; label: string })
 function RulerTicker() {
   const ticks = Array.from({ length: 61 })
   return (
-    <div className="ruler relative mt-2 h-10 w-full max-w-[620px] overflow-hidden" aria-hidden="true">
+    <div className="ruler relative mt-2 h-8 w-full max-w-[620px] overflow-hidden" aria-hidden="true">
       <div className="animate-ticker flex h-full w-max items-center">
-        {[0, 1].map(set => <div className="flex h-full items-center gap-[14px] pr-[14px]" key={set}>{ticks.map((_, index) => <span className="block w-px rounded-full bg-[rgba(239,206,150,.5)]" style={{ height: index % 5 === 0 ? 26 : 18 } as CSSProperties} key={`${set}-${index}`} />)}</div>)}
+        {[0, 1].map(set => <div className="flex h-full items-center gap-[14px] pr-[14px]" key={set}>{ticks.map((_, index) => <span className="block w-px rounded-full bg-[rgba(239,206,150,.5)]" style={{ height: index % 5 === 0 ? 22 : 14 } as CSSProperties} key={`${set}-${index}`} />)}</div>)}
       </div>
-      <span className="absolute left-1/2 top-0 h-10 w-0.5 -translate-x-1/2 rounded-full bg-[#EFCE96]" />
+      <span className="absolute left-1/2 top-0 h-8 w-0.5 -translate-x-1/2 rounded-full bg-[#EFCE96]" />
     </div>
   )
 }
@@ -265,16 +263,16 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} group flex min-h-[200px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(105deg, rgba(11,12,18,.82), rgba(33,15,10,.38)), url(${insightsImage})` }}>
+    if (id === 'activities') return <article className={`${shared} color-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl border border-white/20 bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: 'linear-gradient(115deg, #e36545 0%, #e8a26f 50%, #81cad4 100%)' }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
-      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-2 block max-w-[92%] text-xs leading-relaxed text-white/65" />
+      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
       <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始 AI 内容推理实验" /></span>
     </article>
-    return <article className={`${shared} group flex min-h-[200px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(105deg, rgba(11,12,18,.78), rgba(49,18,9,.34)), url(${planImage})` }}>
+    return <article className={`${shared} color-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl border border-white/20 bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: 'linear-gradient(115deg, #4aa9b8 0%, #8f879c 46%, #e0613d 100%)' }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
-      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-2 block max-w-[92%] text-xs leading-relaxed text-white/65" />
+      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
       <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.insightsMeta} editing={editing} onChange={value => setCopy('insightsMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="进入 AI 案例进化引擎" /></span>
     </article>
   }
@@ -341,17 +339,17 @@ export default function App() {
         </nav>
       </AnimatedElement>
 
-      <div className="relative z-[5] px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:pb-4 xl:pt-4">
-        <div className="flex flex-col gap-10 xl:min-h-[calc(100svh-136px)] xl:flex-row xl:items-end xl:justify-between">
+      <div className="relative z-[5] px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:pb-0 xl:pt-0">
+        <div className="flex flex-col gap-10 xl:min-h-[calc(100svh-104px)] xl:flex-row xl:items-center xl:justify-between">
           <section className="w-full sm:w-[520px] lg:w-[620px]" aria-labelledby="age-title">
-            <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px] xl:h-[520px]">
+            <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px] xl:h-[450px]">
               <div className="animate-spin-bg absolute inset-[-5%] bg-cover bg-center" style={{ backgroundImage: `url(${ageTexture})` }} /><div className="age-glow absolute inset-0" />
               <div className="relative z-10 flex max-w-[82%] flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]"><EditableText value={data.copy.metric} editing={editing} onChange={value => setCopy('metric', value)} /></strong></AnimatedElement></div>
             </div></AnimatedElement>
             <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="max-w-full rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-center text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
             {renderRegion('ageBottom', 'mt-6')}
           </section>
-          {renderRegion('side', 'w-full xl:w-[620px] xl:max-w-[52vw]')}
+          {renderRegion('side', 'w-full xl:w-[430px] xl:max-w-[38vw] xl:-translate-y-10')}
         </div>
         {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>
