@@ -20,6 +20,24 @@ type SpaceDirection = {
   copy: string
 }
 
+type SimulationFinding = {
+  id: string
+  level: 'P0' | 'P1' | '观察'
+  time: string
+  actor: string
+  event: string
+  impact: string
+  evidence: string
+  suggestion: string
+}
+
+type PlayerRun = {
+  type: string
+  behavior: string
+  result: string
+  status: '阻断' | '风险' | '通过'
+}
+
 const cookieName = 'deepseek_admin_session'
 const cookieMaxAge = 60 * 60 * 24 * 30
 const allowedModels = new Set(['deepseek-v4-pro', 'deepseek-v4-flash'])
@@ -129,7 +147,8 @@ function parseAnalysis(value: unknown) {
     .map(item => cleanText(item, 300))
     .filter(Boolean)
     .slice(0, 6)
-  const rawV1 = raw.v1 && typeof raw.v1 === 'object' ? raw.v1 as Record<string, unknown> : {}
+  const modelValue = raw.model || raw.v1
+  const rawV1 = modelValue && typeof modelValue === 'object' ? modelValue as Record<string, unknown> : {}
   const beats = (Array.isArray(rawV1.beats) ? rawV1.beats : [])
     .map(item => cleanText(item, 120))
     .filter(Boolean)
@@ -154,6 +173,59 @@ function parseAnalysis(value: unknown) {
     recovery: cleanText(rawV1.recovery, 1200),
     spaceDirections,
   }
+  const rawSimulation = raw.simulation && typeof raw.simulation === 'object' ? raw.simulation as Record<string, unknown> : {}
+  const findings = (Array.isArray(rawSimulation.findings) ? rawSimulation.findings : [])
+    .slice(0, 8)
+    .map((item, index): SimulationFinding => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      const levelText = cleanText(row.level, 10)
+      return {
+        id: cleanText(row.id, 40) || `finding-${index + 1}`,
+        level: levelText === 'P0' || levelText === 'P1' ? levelText : '观察',
+        time: cleanText(row.time, 50),
+        actor: cleanText(row.actor, 100),
+        event: cleanText(row.event, 800),
+        impact: cleanText(row.impact, 600),
+        evidence: cleanText(row.evidence, 500),
+        suggestion: cleanText(row.suggestion, 800),
+      }
+    })
+    .filter(item => item.event && item.impact && item.suggestion)
+  const playerRuns = (Array.isArray(rawSimulation.playerRuns) ? rawSimulation.playerRuns : [])
+    .slice(0, 8)
+    .map((item): PlayerRun => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      const statusText = cleanText(row.status, 10)
+      return {
+        type: cleanText(row.type, 80),
+        behavior: cleanText(row.behavior, 400),
+        result: cleanText(row.result, 600),
+        status: statusText === '阻断' || statusText === '通过' ? statusText : '风险',
+      }
+    })
+    .filter(item => item.type && item.result)
+  const timeline = (Array.isArray(rawSimulation.timeline) ? rawSimulation.timeline : [])
+    .slice(0, 8)
+    .map(item => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      return {
+        time: cleanText(row.time, 50),
+        event: cleanText(row.event, 160),
+        outcome: cleanText(row.outcome, 600),
+      }
+    })
+    .filter(item => item.time && item.event && item.outcome)
+  const simulation = {
+    verdict: cleanText(rawSimulation.verdict, 160),
+    headline: cleanText(rawSimulation.headline, 600),
+    pathCount: Math.max(1, Math.min(999, Number(rawSimulation.pathCount) || 1)),
+    checks: Math.max(1, Math.min(999, Number(rawSimulation.checks) || 1)),
+    coverage: Math.max(1, Math.min(100, Number(rawSimulation.coverage) || 1)),
+    blockers: Math.max(0, Math.min(99, Number(rawSimulation.blockers) || 0)),
+    findings,
+    playerRuns,
+    timeline,
+  }
   if (
     !summary
     || insights.length < 4
@@ -165,8 +237,13 @@ function parseAnalysis(value: unknown) {
     || !v1.mechanics
     || !v1.recovery
     || spaceDirections.length < 3
+    || !simulation.verdict
+    || !simulation.headline
+    || findings.length < 4
+    || playerRuns.length < 4
+    || timeline.length < 4
   ) throw new Error('Incomplete analysis')
-  return { summary, insights, questions, v1 }
+  return { summary, insights, questions, v1, simulation }
 }
 
 export default {
@@ -224,7 +301,13 @@ export default {
       try {
         const body = await request.json() as {
           model?: string
-          inputs?: { story?: string; rules?: string; people?: string; duration?: string }
+          inputs?: {
+            story?: string
+            rules?: string
+            people?: string
+            duration?: string
+            characters?: Array<{ name?: string; profile?: string }>
+          }
           writerNote?: string
         }
         const model = allowedModels.has(body.model || '') ? body.model! : 'deepseek-v4-pro'
@@ -233,6 +316,12 @@ export default {
           rules: cleanText(body.inputs?.rules, 20000),
           people: cleanText(body.inputs?.people, 100),
           duration: cleanText(body.inputs?.duration, 100),
+          characters: (Array.isArray(body.inputs?.characters) ? body.inputs.characters : [])
+            .slice(0, 20)
+            .map(character => ({
+              name: cleanText(character?.name, 100),
+              profile: cleanText(character?.profile, 1200),
+            })),
           writerNote: cleanText(body.writerNote, 10000),
         }
         if (!input.story) return json({ ok: false, message: '请先填写故事详情。' }, 400)
@@ -248,19 +337,26 @@ export default {
             messages: [
               {
                 role: 'system',
-                content: `你是服务专业编剧部门的内容推理顾问。请先完成内部分析，再给出一套可进入模拟试玩的 V1 内容方案。只使用用户提供的事实；需要创作性补全时明确作为方案建议，不替代编剧做最终决定。请只输出合法 JSON，不要 Markdown。JSON 结构必须为：
-{"summary":"本轮整体理解","insights":[{"id":"premise","title":"核心命题","content":"分析内容","evidence":"明确引用哪项输入并指出缺口","confidence":"高|中|待确认"}],"questions":["需要后续确认的问题"],"v1":{"title":"方案名称","logline":"一句话V1体验方案","beats":["六个连续剧情节点"],"roleDesign":"人物关系、个人任务与信息差","clueChain":"证据链、验证逻辑与结局条件","mechanics":"机关触发、分支与核心玩法规则","recovery":"卡关、误解或机关失败时的恢复方案","spaceDirections":[{"title":"空间方向名称","meta":"方向侧重点","copy":"空间组织方式及其与内容的关系"}]}}
-insights 必须恰好 6 项并依次覆盖：核心命题、主冲突结构、世界与规则边界、人物关系动力、戏剧时间线、体验目标。每项 evidence 必须说明输入依据；无法确定时写待确认。v1.beats 输出 6 个按时间顺序、名称简短的节点。spaceDirections 必须输出 3 个明显不同但都服从同一内容方案的方向。questions 输出 3 至 6 个后续真正需要编剧判断的问题。`,
+                content: `你是服务专业编剧和导演部门的 AI 内容模拟实验室。用户提交的是他们自己的原始创作版本；你的工作是建立内部推演模型、模拟玩家行为并报告具体发生的事件，不是替用户重写作品。
+
+请只输出合法 JSON，不要 Markdown。JSON 结构必须为：
+{"summary":"本轮推演依据概述","simulation":{"verdict":"一句话推进建议","headline":"一句话说明首轮最重要的实际现象","pathCount":36,"checks":32,"coverage":86,"blockers":2,"findings":[{"id":"ending-bypass","level":"P0|P1|观察","time":"发生时点","actor":"哪类玩家或哪些角色","event":"模拟中具体发生了什么","impact":"这个事件造成的实际影响","evidence":"由哪条输入、规则关系或行为路径触发","suggestion":"只作为参考、可由编剧改写的具体修改建议"}],"playerRuns":[{"type":"玩家策略类型","behavior":"采用的行为策略","result":"这类玩家在模拟中的具体结果","status":"阻断|风险|通过"}],"timeline":[{"time":"时间区间","event":"阶段或事件","outcome":"这个阶段实际出现的结果"}]},"insights":[{"id":"premise","title":"核心命题","content":"分析内容","evidence":"明确引用哪项输入并指出缺口","confidence":"高|中|待确认"}],"questions":["必须由编剧判断的问题"],"model":{"title":"原始内容的推演模型名称","logline":"一句话描述系统如何理解原始体验","beats":["按时间顺序的体验阶段"],"roleDesign":"人物目标、秘密、权限与信息差的结构重建","clueChain":"证据链、验证逻辑与结局条件","mechanics":"机关触发、分支与核心玩法规则","recovery":"卡关、误解或机关失败时的恢复路径","spaceDirections":[{"title":"由首轮问题带出的空间方向","meta":"方向侧重点","copy":"空间组织方式及其与首轮行为问题的关系"}]}}
+
+simulation.findings 必须输出 6 项具体事件，禁止只写“节奏不足、角色参与度低”这类抽象评价；每项必须包含发生时间、行为主体、具体动作、实际后果和触发证据。playerRuns 必须输出 6 种明显不同的玩家策略。timeline 输出 5 至 7 个连续时间阶段。pathCount、checks、coverage 和 blockers 应与本轮实际分析规模一致，不要机械使用示例数字。
+
+insights 必须恰好 6 项并依次覆盖：核心命题、主冲突结构、世界与规则边界、人物关系动力、戏剧时间线、体验目标。每项 evidence 必须说明输入依据；无法确定时写待确认。model.beats 输出 5 至 8 个名称简短的节点。spaceDirections 必须输出 3 个明显不同的方向，并明确回应首轮出现的行动或空间问题。questions 输出 3 至 6 个真正需要编剧决定、AI不能代替判断的问题。
+
+当输入资料不足时，可以为了模拟建立假设，但必须在 evidence 或 summary 中明确标注为“模拟假设”，不能把补充内容伪装成用户原稿。`,
               },
               {
                 role: 'user',
-                content: `请对以下创作基线做结构化 JSON 分析：\n${JSON.stringify(input)}`,
+                content: `请对以下原始创作版本运行首轮 AI 模拟试玩并输出结构化结果：\n${JSON.stringify(input)}`,
               },
             ],
             thinking: { type: 'enabled' },
             reasoning_effort: 'high',
             response_format: { type: 'json_object' },
-            max_tokens: 4500,
+            max_tokens: 6500,
             stream: false,
           }),
         })

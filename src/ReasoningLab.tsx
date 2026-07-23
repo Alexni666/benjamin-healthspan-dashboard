@@ -25,18 +25,24 @@ import {
   X,
 } from 'lucide-react'
 
-const storageKey = 'ai-reasoning-lab-demo:v3'
+const storageKey = 'ai-reasoning-lab-demo:v4'
 const visualImages = [
   'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png',
   'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a933b0da384a5a3f8b0d9986bb919838.png',
   'https://polo-pecan-73837341.figma.site/_assets/v11/d8d9bd498347ea96ca4d675a624c8d90e06786e7.png',
 ]
 
+type CharacterInput = {
+  name: string
+  profile: string
+}
+
 type Inputs = {
   story: string
   rules: string
   people: string
   duration: string
+  characters: CharacterInput[]
 }
 
 type AnalysisInsight = {
@@ -58,11 +64,42 @@ type V1Draft = {
   spaceDirections: Array<{ id: string; title: string; meta: string; copy: string }>
 }
 
+type SimulationFinding = {
+  id: string
+  level: 'P0' | 'P1' | '观察'
+  time: string
+  actor: string
+  event: string
+  impact: string
+  evidence: string
+  suggestion: string
+}
+
+type PlayerRun = {
+  type: string
+  behavior: string
+  result: string
+  status: '阻断' | '风险' | '通过'
+}
+
+type SimulationResult = {
+  verdict: string
+  headline: string
+  pathCount: number
+  checks: number
+  coverage: number
+  blockers: number
+  findings: SimulationFinding[]
+  playerRuns: PlayerRun[]
+  timeline: Array<{ time: string; event: string; outcome: string }>
+}
+
 type AnalysisResult = {
   summary: string
   insights: AnalysisInsight[]
   questions: string[]
   v1?: V1Draft
+  simulation?: SimulationResult
   usage?: {
     prompt_tokens: number
     completion_tokens: number
@@ -77,10 +114,8 @@ type SavedLab = {
   selectedPlan: string
   writerNote: string
   executionConstraints: string
-  reviewedInsights: string[]
   revisionDrafts: Record<string, string>
   fixes: string[]
-  playtestStarted: boolean
   secondTestDone: boolean
   analysis?: AnalysisResult
 }
@@ -90,14 +125,22 @@ const defaultInputs: Inputs = {
   rules: '玩家可自由搜证、交换信息；每人有公开身份和个人任务；最终需要开启档案前室并完成投票。',
   people: '6',
   duration: '90 分钟',
+  characters: [
+    { name: '旅馆经理', profile: '负责重启筹备，掌握公共区域权限，希望档案问题不要影响开业。' },
+    { name: '档案管理员', profile: '熟悉档案编号和保管规则，知道部分记录曾被人为修改。' },
+    { name: '维修师', profile: '可以进入后勤区域，了解断电和隐藏通道的真实情况。' },
+    { name: '调查记者', profile: '持续追查旅馆旧案，希望获得可以公开的关键证据。' },
+    { name: '投资人代表', profile: '关心项目能否正常推进，对档案内容有自己的利益判断。' },
+    { name: '失踪员工家属', profile: '希望确认亲属经历，不信任旅馆现有的官方说法。' },
+  ],
 }
 
 const stages = [
   ['01', '创作输入'],
-  ['02', 'AI V1 方案'],
-  ['03', '模拟诊断'],
+  ['02', '首轮试玩'],
+  ['03', '诊断拆解'],
   ['04', '编剧修改'],
-  ['05', '最终报告'],
+  ['05', '二轮结果'],
 ]
 
 const plans = [
@@ -117,32 +160,37 @@ const demoV1: V1Draft = {
   spaceDirections: plans,
 }
 
-const players = [
-  ['强推理型', '尝试合并信息并提前触发结局', '发现钟厅谜题可能被提前观察'],
-  ['完成主义型', '逐项搜索，不愿跳过低价值道具', '中段可能出现 17 分钟连续搜证'],
-  ['钻漏洞型', '只满足字面条件就要求开门', '成功绕过“4 条线索”的模糊门槛'],
-  ['规则误解型', '把个人任务当成公共前置条件', '错误操作缺少恢复提示'],
-  ['被动跟随型', '等待队友决定，较少主动共享', '2 个角色前 30 分钟参与不足'],
-  ['综艺效果型', '频繁表达、质疑和绕行', '主门拥堵放大跟拍与控场压力'],
-]
-
-const risks = [
-  ['P0', '档案开启规则', '“4 条关键线索”未定义类别，结局可被越级触发。'],
-  ['P0', '隐藏通道死路', '断路器卡是唯一触发，遗漏后整局无法推进。'],
-  ['P1', '角色前段闲置', '两名角色的有效任务启动过晚。'],
-  ['P1', '图书室门口拥堵', '1.2 米主门承受六人和跟拍反复进出。'],
-  ['P1', '祖父钟机关暴露', '餐厅视线可以提前看到暗格缝隙。'],
-  ['P1', '执行人员不足', '两名工作人员无法兼顾控场、复位、NPC 与安全。'],
-]
-
-const fixes = [
-  ['rule', '重写开门条件', '第七把钥匙＋路线证据＋动机证据，三类条件必须同时成立。'],
-  ['route', '增加备用通路', '50 分钟仍未开启时由维修 NPC 释放日志，并开放第二通路。'],
-  ['role', '前置角色任务', '10 分钟开放照片比对，25 分钟开放钟表校准。'],
-  ['flow', '调整图书室动线', '新增餐厅侧门，形成主门进、侧门出的单向循环。'],
-  ['prop', '隐藏核心机关', '钟体旋转 15 度并增加内衬，只有正确时间才显示暗格。'],
-  ['crew', '补齐执行配置', '配置 6 名核心执行、3 个固定机位与 2 组跟拍。'],
-]
+const demoSimulation: SimulationResult = {
+  verdict: '修改两项阻断问题后，再进入真人试玩',
+  headline: '故事主线可以跑通，但结局条件和唯一通路会让部分玩家提前结束或完全卡住。',
+  pathCount: 36,
+  checks: 32,
+  coverage: 86,
+  blockers: 2,
+  findings: [
+    { id: 'ending', level: 'P0', time: '32 分钟', actor: '钻漏洞型玩家', event: '只收集四条字面上符合要求的线索，就要求开启档案前室并进入投票。', impact: '绕过人物动机与路线证据，结局可能提前约 28 分钟发生。', evidence: '触发依据：游戏规则中的“4条关键线索”没有限定证据类别。', suggestion: '把开门条件改为“第七把钥匙＋路线证据＋动机证据”，三类条件必须同时成立。' },
+    { id: 'dead-end', level: 'P0', time: '49 分钟', actor: '完成主义型玩家', event: '没有找到断路器卡，隐藏通道始终无法开启，之后的搜索不能产生新进展。', impact: '唯一推进路径失效，整局进入不可恢复的停滞。', evidence: '触发依据：断路器卡是通道唯一条件，规则中没有备用释放方式。', suggestion: '增加超时恢复：50分钟仍未开启时释放维修日志，并开放第二条进入路径。' },
+    { id: 'idle-role', level: 'P1', time: '0–27 分钟', actor: '两名信息较少的角色', event: '前段只能跟随其他人搜证，没有独立任务，也没有必须由本人完成的行为。', impact: '参与度明显偏低，后续突然承担关键判断时缺乏行为积累。', evidence: '角色任务首次有效触发时间晚于首个集中交换节点。', suggestion: '把照片比对和钟表校准前置，让两名角色在前10分钟获得必须由本人完成的任务。' },
+    { id: 'congestion', level: 'P1', time: '18–36 分钟', actor: '六名玩家与跟拍人员', event: '三次信息交换都集中在图书室主门，搜索和表达互相打断。', impact: '主线节奏被空间拥堵拖慢，现场收声与跟拍难度上升。', evidence: '空间需求推演中，主门同时承载进入、离开和围观三种行为。', suggestion: '给图书室增加侧向离开路径，形成主门进入、侧门离开的单向循环。' },
+    { id: 'exposed-prop', level: 'P1', time: '14 分钟', actor: '强推理型玩家', event: '从餐厅视角提前看到祖父钟暗格缝隙，在相关时间线索出现前开始拆解机关。', impact: '机关失去逐步发现过程，后续两条线索价值下降。', evidence: '视觉路径与机关朝向重叠，缺少遮挡和分阶段开放。', suggestion: '调整钟体朝向并增加内衬，只有完成正确时间校准后才显示暗格边缘。' },
+    { id: 'misread-rule', level: '观察', time: '41 分钟', actor: '规则误解型玩家', event: '把个人任务理解成全队必须完成的公共前置条件，并阻止其他人继续投票。', impact: '产生约 8 分钟无效争论，但现有规则没有明确纠错入口。', evidence: '个人任务与公共结局条件使用了相近措辞。', suggestion: '把个人任务与公共结局条件分栏说明，并增加一次不暴露答案的主持纠错提示。' },
+  ],
+  playerRuns: [
+    { type: '强推理型', behavior: '合并信息并提前检查机关', result: '在第14分钟发现钟体异常，提前暴露核心机关。', status: '风险' },
+    { type: '完成主义型', behavior: '逐项搜索所有道具', result: '遗漏断路器卡后，在第49分钟进入不可恢复停滞。', status: '阻断' },
+    { type: '钻漏洞型', behavior: '只满足规则字面条件', result: '用四条同类线索绕过验证，在第32分钟触发结局。', status: '阻断' },
+    { type: '规则误解型', behavior: '把个人任务当成公共条件', result: '造成8分钟争论，之后在主持提示下恢复。', status: '风险' },
+    { type: '被动跟随型', behavior: '等待队友决定并较少共享', result: '两名角色前27分钟没有形成有效行动。', status: '风险' },
+    { type: '综艺效果型', behavior: '高频表达、质疑与绕行', result: '放大图书室门口拥堵，但没有阻断主线。', status: '通过' },
+  ],
+  timeline: [
+    { time: '00–12', event: '进入与身份确认', outcome: '六名角色完成公开信息交换，主目标被理解。' },
+    { time: '13–27', event: '第一轮分散搜证', outcome: '两名角色缺少独立任务，核心机关被提前观察。' },
+    { time: '28–42', event: '线索交换与路线重建', outcome: '钻漏洞路径提前满足模糊的结局条件。' },
+    { time: '43–58', event: '隐藏通道与档案前室', outcome: '遗漏唯一道具的路径出现不可恢复停滞。' },
+    { time: '59–90', event: '集中判断与投票', outcome: '可运行路径能够完成结局，但动机证据参与度不足。' },
+  ],
+}
 
 const scoreRows = [
   ['规则完整性', 58, 88],
@@ -170,33 +218,17 @@ const demoQuestions = [
 ]
 
 const analysisSteps = [
-  ['读取创作基线', '解析故事、规则、人物数量与时长'],
-  ['提取世界规则', '识别不能被改变的故事边界'],
-  ['建立人物动力', '检查目标、秘密与信息差'],
-  ['重建戏剧时间线', '分析阶段、转折与高潮位置'],
-  ['生成空间方向', '让内容、动线与机关保持一致'],
-  ['形成 V1 方案', '写入可模拟试玩的首轮答案'],
+  ['故事结构建模', '识别事件、目标、转折和结局条件'],
+  ['角色动力推导', '建立人物目标、秘密、权限与信息差'],
+  ['规则线索建图', '连接触发条件、证据链和恢复路径'],
+  ['多类玩家模拟', '运行不同策略与理解方式的行为路径'],
+  ['空间行动推演', '检查聚集、绕行、机关暴露和执行压力'],
+  ['风险诊断汇总', '记录卡关、绕规则与节奏异常的具体事件'],
 ]
 
-const fixWeights: Record<string, number> = {
-  rule: 6,
-  route: 5,
-  role: 3,
-  flow: 3,
-  prop: 2,
-  crew: 2,
-}
+const analysisMetrics = ['6 个剧情阶段', '6 个角色目标', '12 条规则关系', '36 条玩家路径', '3 类空间影响', '6 项风险事件']
 
-const fixImpacts: Record<string, Record<string, number>> = {
-  rule: { 规则完整性: 24, 线索闭环: 5 },
-  route: { 线索闭环: 12, 节奏体验: 4 },
-  role: { 角色参与: 16, 节奏体验: 4 },
-  flow: { 空间动线: 17, 拍摄安全: 5 },
-  prop: { 规则完整性: 4, 线索闭环: 3 },
-  crew: { 执行可行: 18, 拍摄安全: 9 },
-}
-
-const defaultRevisionDrafts = Object.fromEntries(fixes.map(([id, , copy]) => [id, copy]))
+const defaultRevisionDrafts = Object.fromEntries(demoSimulation.findings.map(finding => [finding.id, finding.suggestion]))
 
 function loadSaved(): SavedLab {
   const fallback: SavedLab = {
@@ -206,10 +238,8 @@ function loadSaved(): SavedLab {
     selectedPlan: 'A',
     writerNote: '',
     executionConstraints: '',
-    reviewedInsights: [],
     revisionDrafts: defaultRevisionDrafts,
     fixes: [],
-    playtestStarted: false,
     secondTestDone: false,
   }
   try {
@@ -217,7 +247,11 @@ function loadSaved(): SavedLab {
     return {
       ...fallback,
       ...stored,
-      inputs: { ...defaultInputs, ...(stored.inputs || {}) },
+      inputs: {
+        ...defaultInputs,
+        ...(stored.inputs || {}),
+        characters: stored.inputs?.characters?.length ? stored.inputs.characters : defaultInputs.characters,
+      },
       revisionDrafts: { ...defaultRevisionDrafts, ...(stored.revisionDrafts || {}) },
       step: Math.min(Math.max(stored.step || 0, 0), stages.length - 1),
       maxVisited: Math.min(Math.max(stored.maxVisited || 0, 0), stages.length - 1),
@@ -295,22 +329,42 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   }, [])
 
   const updateLab = (patch: Partial<SavedLab>) => setLab(current => ({ ...current, ...patch }))
-  const updateInput = (key: keyof Inputs, value: string) => setLab(current => ({ ...current, inputs: { ...current.inputs, [key]: value } }))
+  const updateInput = (key: 'story' | 'rules' | 'duration', value: string) => setLab(current => ({ ...current, inputs: { ...current.inputs, [key]: value } }))
+  const updatePeople = (value: string) => {
+    const count = Math.min(20, Math.max(1, Number.parseInt(value, 10) || 1))
+    setLab(current => {
+      const characters = [...current.inputs.characters]
+      while (characters.length < count) characters.push({ name: `角色 ${characters.length + 1}`, profile: '' })
+      return { ...current, inputs: { ...current.inputs, people: String(count), characters: characters.slice(0, count) } }
+    })
+  }
+  const updateCharacter = (index: number, key: keyof CharacterInput, value: string) => setLab(current => ({
+    ...current,
+    inputs: {
+      ...current.inputs,
+      characters: current.inputs.characters.map((character, characterIndex) => characterIndex === index ? { ...character, [key]: value } : character),
+    },
+  }))
   const go = (nextStep: number) => setLab(current => ({ ...current, step: nextStep, maxVisited: Math.max(current.maxVisited, nextStep) }))
   const next = () => go(Math.min(lab.step + 1, stages.length - 1))
-  const simulatedScore = Math.min(89, 68 + lab.fixes.reduce((total, id) => total + (fixWeights[id] || 0), 0))
-  const secondScore = lab.secondTestDone ? simulatedScore : 68
-  const readyForTabletop = lab.secondTestDone && lab.fixes.includes('rule') && lab.fixes.includes('route') && secondScore >= 79
   const activeInsights = lab.analysis?.insights?.length ? lab.analysis.insights : demoInsights
   const activeQuestions = lab.analysis?.questions?.length ? lab.analysis.questions : demoQuestions
   const activeV1 = lab.analysis?.v1 || demoV1
+  const activeSimulation = lab.analysis?.simulation || demoSimulation
   const activePlans = activeV1.spaceDirections.length === 3 ? activeV1.spaceDirections : plans
+  const findingWeight = (finding: SimulationFinding) => finding.level === 'P0' ? 6 : finding.level === 'P1' ? 3 : 1
+  const totalFindingWeight = activeSimulation.findings.reduce((total, finding) => total + findingWeight(finding), 0)
+  const selectedFindingWeight = activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).reduce((total, finding) => total + findingWeight(finding), 0)
+  const simulatedScore = Math.min(89, Math.round(68 + 21 * (selectedFindingWeight / Math.max(1, totalFindingWeight))))
+  const secondScore = lab.secondTestDone ? simulatedScore : 68
+  const remainingBlockers = activeSimulation.findings.filter(finding => finding.level === 'P0' && !lab.fixes.includes(finding.id)).length
+  const readyForTabletop = lab.secondTestDone && remainingBlockers === 0 && secondScore >= 79
   const updateRevision = (id: string, value: string) => updateLab({ revisionDrafts: { ...lab.revisionDrafts, [id]: value }, secondTestDone: false })
   const toggleFix = (id: string) => updateLab({ fixes: lab.fixes.includes(id) ? lab.fixes.filter(item => item !== id) : [...lab.fixes, id], secondTestDone: false })
-  const dimensionAfter = (label: string, before: number, target: number) => {
+  const dimensionAfter = (_label: string, before: number, target: number) => {
     if (!lab.secondTestDone) return before
-    const increase = lab.fixes.reduce((total, id) => total + (fixImpacts[id]?.[label] || 0), 0)
-    return Math.min(target, before + increase)
+    const improvementRatio = selectedFindingWeight / Math.max(1, totalFindingWeight)
+    return Math.min(target, Math.round(before + (target - before) * improvementRatio))
   }
 
   const saveDeepSeekConnection = async () => {
@@ -354,7 +408,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     }
 
     const startedAt = Date.now()
-    setAnalysisRun({ state: 'running', step: 0, message: '正在建立分析任务…' })
+    setAnalysisRun({ state: 'running', step: 0, message: '正在建立首轮模拟任务…' })
     const progressTimer = window.setInterval(() => {
       setAnalysisRun(current => current.state === 'running'
         ? { ...current, step: Math.min(current.step + 1, analysisSteps.length - 2) }
@@ -376,9 +430,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       setAnalysisRun({ state: 'running', step: analysisSteps.length - 1, message: '分析完成，正在写入结果…' })
       updateLab({
         analysis: { ...result.analysis, usage: result.usage },
-        reviewedInsights: [],
+        revisionDrafts: Object.fromEntries(result.analysis.simulation?.findings.map(finding => [finding.id, finding.suggestion]) || []),
         fixes: [],
-        playtestStarted: false,
         secondTestDone: false,
       })
       window.setTimeout(() => {
@@ -410,20 +463,30 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       `规则：${lab.inputs.rules}`,
       `人数：${lab.inputs.people}`,
       `时长：${lab.inputs.duration}`,
+      '角色：',
+      ...lab.inputs.characters.map((character, index) => `${index + 1}. ${character.name}：${character.profile || '未补充'}`),
+      '',
+      `首轮结论：${activeSimulation.verdict}`,
+      `模拟规模：${activeSimulation.pathCount} 条行为路径，${activeSimulation.checks} 项结构检查`,
+      `资料覆盖：${activeSimulation.coverage}%`,
+      `阻断事件：${activeSimulation.blockers}`,
+      '',
+      '首轮具体反馈：',
+      ...activeSimulation.findings.map(finding => `- [${finding.level}] ${finding.time}｜${finding.actor}：${finding.event} 影响：${finding.impact}`),
+      '',
       `采用方案：${lab.selectedPlan} ${activePlans.find(plan => plan.id === lab.selectedPlan)?.title}`,
       '',
       `创作基线版本：V1.0`,
       `验证后版本：${lab.secondTestDone ? 'V1.1' : '尚未运行二次验证'}`,
-      `首轮结构成熟度：68`,
       `验证后成熟度：${secondScore}`,
-      `结论：${readyForTabletop ? '建议进入 6 人真人桌面试玩，不直接进入完整实景。' : '仍有关键问题未修复，暂不进入真人试玩。'}`,
+      `二轮结论：${readyForTabletop ? `建议进入 ${lab.inputs.people} 人真人桌面试玩，不直接进入完整实景。` : '仍有关键问题未修复，暂不进入真人试玩。'}`,
       '',
       '已纳入 V1.1 的编剧与执行修改：',
-      ...fixes.filter(([id]) => lab.fixes.includes(id)).map(([id, title]) => `- ${title}：${lab.revisionDrafts[id]}`),
+      ...activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).map(finding => `- ${finding.actor}｜${finding.event}：${lab.revisionDrafts[finding.id]}`),
       '',
       '仍需真人验证：23:17 谜题难度、隐藏角色平衡、听证时长、真实动线、机关手感与安全。',
       '',
-      `说明：V1 内容方案与生成依据${lab.analysis ? '来自 DeepSeek 本轮真实生成' : '当前使用演示样本'}；平面图、模拟评分与决策结论仍为原型规则，需要编剧与真人验证。`,
+      `说明：首轮行为结果和诊断依据${lab.analysis ? '来自 DeepSeek 本轮真实生成' : '当前使用演示样本'}；平面图和二轮评分仍为交互原型，需要编剧、导演与真人试玩验证。`,
     ].join('\n')
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
@@ -443,49 +506,126 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const content = (() => {
     if (lab.step === 0) return (
       <>
-        <StageHeading eyebrow="01 / CREATIVE BASELINE" title="建立创作基线" copy="导入故事、互动规则与体验规模，作为编剧部门和后续推演共同引用的起始版本。制作与场地限制将在空间阶段补充。" singleLine />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} /></Panel>
-          <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} /></Panel>
-          <Panel><label className="lab-field-label"><Users size={15} />人物数量</label><input value={lab.inputs.people} onChange={event => updateInput('people', event.target.value)} /><p className="lab-field-help">用于推导角色关系、信息差和参与度。</p></Panel>
-          <Panel><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} /><p className="lab-field-help">用于建立剧情阶段、线索释放和高潮时点。</p></Panel>
-        </div>
+        <StageHeading eyebrow="01 / CREATIVE INPUT" title="导入创作版本" copy="输入现有故事、规则、时长和角色资料。AI先完成首轮模拟，不会改写或覆盖编剧原稿。" singleLine />
+
+        <section className="lab-input-section">
+          <div className="lab-section-heading"><span>01</span><div><h2>故事与体验规则</h2><p>故事梗概和完整文档都可以直接粘贴，系统会自动识别信息密度。</p></div></div>
+          <div className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+            <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={9} placeholder="粘贴故事梗概、完整故事文档或案件资料。" /></Panel>
+            <div className="grid gap-4">
+              <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="自由行动、信息交换、胜负条件、结局触发方式……" /></Panel>
+              <Panel><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} placeholder="例如：90分钟" /><p className="lab-field-help">用于推演剧情阶段、线索释放和高潮发生时间。</p></Panel>
+            </div>
+          </div>
+        </section>
+
+        <section className="lab-input-section mt-7">
+          <div className="lab-section-heading lab-role-heading">
+            <span>02</span>
+            <div><h2>角色设定</h2><p>只填人数也可以开始；已有角色资料时，补充基本身份、目标和已知信息。</p></div>
+            <label className="lab-people-count"><Users size={14} /><span>人数</span><input type="number" min="1" max="20" value={lab.inputs.people} onChange={event => updatePeople(event.target.value)} /></label>
+          </div>
+          <div className="lab-character-grid">
+            {lab.inputs.characters.map((character, index) => (
+              <Panel className="lab-character-card" key={index}>
+                <div className="lab-character-index">{String(index + 1).padStart(2, '0')}</div>
+                <div>
+                  <label>角色名称</label>
+                  <input value={character.name} onChange={event => updateCharacter(index, 'name', event.target.value)} placeholder={`角色 ${index + 1}`} />
+                  <label>基本情况</label>
+                  <textarea rows={3} value={character.profile} onChange={event => updateCharacter(index, 'profile', event.target.value)} placeholder="身份、目标、秘密、权限或已经掌握的信息。" />
+                </div>
+              </Panel>
+            ))}
+          </div>
+        </section>
       </>
     )
 
     if (lab.step === 1) return (
       <>
-        <StageHeading eyebrow="02 / AI FIRST DRAFT" title="AI 已形成 V1 方案" copy="先看完整答案，再决定是否进入模拟。故事理解和内容推理已经收进生成依据，不再要求编剧逐页确认。" />
+        <StageHeading eyebrow="02 / FIRST PLAYTEST" title="首轮模拟试玩结果" copy="先看模拟中真实发生的事件，再决定是否展开内容、空间和推演依据。这里不替编剧评价作品，只呈现可复查的行为结果。" />
+        <Panel className="lab-result-hero">
+          <div>
+            <div className="lab-result-status"><span /><strong>首轮模拟完成</strong><small>{lab.analysis ? 'DEEPSEEK LIVE RUN' : 'DEMO RUN'}</small></div>
+            <h2>{activeSimulation.verdict}</h2>
+            <p>{activeSimulation.headline}</p>
+          </div>
+          <div className="lab-result-coverage"><strong>{activeSimulation.coverage}%</strong><span>本轮资料覆盖</span><small>其余内容按模拟假设处理</small></div>
+        </Panel>
+
+        <div className="lab-metric-grid mt-4">
+          {[
+            [String(activeSimulation.pathCount), '行为路径', '不同策略与理解方式'],
+            [String(activeSimulation.checks), '结构检查', '规则、线索与空间'],
+            [String(activeSimulation.blockers), '阻断事件', '必须优先处理'],
+            [lab.inputs.people, '故事角色', `${activeSimulation.playerRuns.length} 类玩家策略`],
+          ].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && activeSimulation.blockers > 0 ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+        </div>
+
+        <div className="lab-section-title mt-8"><div><p>CONCRETE EVENTS</p><h2>首轮中实际发生的关键事件</h2></div><span>{activeSimulation.findings.length} 项反馈</span></div>
+        <Panel className="lab-findings-panel">
+          {activeSimulation.findings.map((finding, index) => (
+            <article className="lab-finding-row" key={finding.id}>
+              <div className="lab-finding-order">{String(index + 1).padStart(2, '0')}</div>
+              <div className="lab-finding-meta"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><strong>{finding.time}</strong><small>{finding.actor}</small></div>
+              <div className="lab-finding-event"><strong>{finding.event}</strong><p>{finding.impact}</p><small>{finding.evidence}</small></div>
+            </article>
+          ))}
+        </Panel>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-[.82fr_1.18fr]">
+          <Panel>
+            <div className="lab-section-title"><div><p>RUN TIMELINE</p><h2>{lab.inputs.duration} 模拟时间线</h2></div></div>
+            <div className="lab-run-timeline">
+              {activeSimulation.timeline.map(item => <div key={`${item.time}-${item.event}`}><span>{item.time}</span><strong>{item.event}</strong><p>{item.outcome}</p></div>)}
+            </div>
+          </Panel>
+          <Panel>
+            <div className="lab-section-title"><div><p>PLAYER PATHS</p><h2>六类玩家行为结果</h2></div><span>逐类可复查</span></div>
+            <div className="lab-player-grid mt-5">
+              {activeSimulation.playerRuns.map(player => <div key={player.type}><div className="flex items-center justify-between gap-2"><strong>{player.type}</strong><span className={`lab-risk-pill ${player.status === '阻断' ? 'lab-risk-p0' : ''}`}>{player.status}</span></div><small>{player.behavior}</small><p>{player.result}</p></div>)}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="lab-result-note"><ShieldCheck size={15} /><p>本页记录的是 AI 结构模拟中发生的现象，不等同于真人体验结论。下一步可以查看每项现象背后的内容、空间和规则依据。</p></div>
+      </>
+    )
+
+    if (lab.step === 2) return (
+      <>
+        <StageHeading eyebrow="03 / DIAGNOSIS" title="结果背后的诊断拆解" copy="AI只重建推演模型并解释首轮现象，不会自动改写原稿。普通导演可以先看结论，编剧可继续深入内容结构、空间影响和推演依据。" />
         <Panel className="lab-v1-hero mb-4">
           <div>
-            <div className="flex items-center gap-2"><WandSparkles size={16} /><span>V1.0 · {lab.analysis ? 'DEEPSEEK GENERATED' : 'DEMO DRAFT'}</span></div>
+            <div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演模型 · {lab.analysis ? 'DEEPSEEK GENERATED' : 'DEMO MODEL'}</span></div>
             <h2>{activeV1.title}</h2>
             <p>{activeV1.logline}</p>
           </div>
-          <div className="lab-v1-hero-meta"><strong>{lab.inputs.people}</strong><span>人物</span><strong>{lab.inputs.duration}</strong><span>时长</span></div>
+          <div className="lab-v1-hero-meta"><strong>{lab.inputs.people}</strong><span>角色</span><strong>{lab.inputs.duration}</strong><span>时长</span></div>
         </Panel>
 
-        <div className="lab-v1-tabs" role="tablist" aria-label="V1 方案内容">
-          {([['content', '内容方案'], ['space', '空间方案'], ['basis', '生成依据']] as const).map(([id, label]) => <button type="button" role="tab" aria-selected={v1Tab === id} className={v1Tab === id ? 'is-active' : ''} onClick={() => setV1Tab(id)} key={id}>{label}</button>)}
+        <div className="lab-v1-tabs" role="tablist" aria-label="诊断拆解内容">
+          {([['content', '内容结构'], ['space', '空间影响'], ['basis', '推演依据']] as const).map(([id, label]) => <button type="button" role="tab" aria-selected={v1Tab === id} className={v1Tab === id ? 'is-active' : ''} onClick={() => setV1Tab(id)} key={id}>{label}</button>)}
         </div>
 
         {v1Tab === 'content' && <>
           <Panel className="mb-4">
-            <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">PLAYABLE STORY FLOW</p><h2 className="mt-1 text-sm font-semibold">{lab.inputs.duration} 首轮体验流程</h2></div><span className="lab-tag">V1.0</span></div>
+            <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">RECONSTRUCTED STORY MODEL</p><h2 className="mt-1 text-sm font-semibold">AI从原稿重建的体验结构</h2></div><span className="lab-tag">只用于推演</span></div>
             <div className="lab-timeline mt-6">{activeV1.beats.map((item, index) => <div key={`${index}-${item}`}><span>{String(index + 1).padStart(2, '0')}</span><strong>{item}</strong></div>)}</div>
           </Panel>
           <div className="grid gap-4 md:grid-cols-2">
             {[
-              ['人物任务与信息差', activeV1.roleDesign, '角色系统'],
-              ['证据链与结局条件', activeV1.clueChain, '线索闭环'],
-              ['机关与核心玩法', activeV1.mechanics, '体验机制'],
-              ['异常与卡关恢复', activeV1.recovery, '恢复系统'],
+              ['人物目标与信息差', activeV1.roleDesign, '角色关系'],
+              ['证据链与结局条件', activeV1.clueChain, '规则连接'],
+              ['机关触发与核心玩法', activeV1.mechanics, '行为路径'],
+              ['卡关与异常恢复', activeV1.recovery, '恢复机制'],
             ].map(([title, copy, tag]) => <Panel key={title}><span className="lab-tag">{tag}</span><h2 className="mt-5 text-base font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-white/55">{copy}</p></Panel>)}
           </div>
         </>}
 
         {v1Tab === 'space' && <>
-          <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SPACE DIRECTIONS</p><h2 className="mt-1 text-sm font-semibold">从三个空间方向中选择一个进入模拟</h2></div><span className="lab-tag">已选方案 {lab.selectedPlan}</span></div>
+          <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SPACE IMPACT</p><h2 className="mt-1 text-sm font-semibold">由首轮行为问题带出的三个空间方向</h2></div><span className="lab-tag">当前查看 {lab.selectedPlan}</span></div>
           <div className="grid gap-4 xl:grid-cols-3">
             {activePlans.map(plan => <button type="button" className={`lab-plan-card ${lab.selectedPlan === plan.id ? 'lab-plan-card-selected' : ''}`} onClick={() => updateLab({ selectedPlan: plan.id })} key={plan.id}>
               <div className="lab-plan-sketch"><PlanSketch variant={plan.id} /></div>
@@ -493,7 +633,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               <p className="mt-3 text-xs tracking-[.12em] text-white/35">{plan.meta}</p><p className="mt-3 text-sm leading-6 text-white/55">{plan.copy}</p>
             </button>)}
           </div>
-          <div className="mb-4 mt-8 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SELECTED DIRECTION · V1.0</p><h2 className="mt-1 text-sm font-semibold">{activePlans.find(plan => plan.id === lab.selectedPlan)?.title}｜三张平面图</h2></div><span className="lab-tag">同一空间版本</span></div>
+          <div className="mb-4 mt-8 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SELECTED DIRECTION</p><h2 className="mt-1 text-sm font-semibold">{activePlans.find(plan => plan.id === lab.selectedPlan)?.title}｜三张空间推演图</h2></div><span className="lab-tag">创意方向，不覆盖场地图纸</span></div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[
               ['总体空间关系图', '入口、公共区、搜证区、高潮区与后勤区的连接关系'],
@@ -501,52 +641,45 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               ['关键区域详图', '核心机关、隐藏通道与高潮区域的触发和安全范围'],
             ].map(([title, copy], index) => <Panel key={title}><div className="lab-plan-preview"><PlanSketch variant={['A', 'B', 'C'][index]} /></div><div className="mt-4 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-[11px] leading-5 text-white/40">{copy}</p></div><span className="lab-tag">{String(index + 1).padStart(2, '0')}</span></div></Panel>)}
           </div>
-          <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">基于内容和平面图的场景效果示意</h2></div>
+          <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">空间影响与场景效果示意</h2></div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {['信息交换区', '核心机关区', '高潮与结局区'].map((title, index) => <Panel key={title}>
               <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-cover bg-center" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(3,5,6,.72)), url(${uploads[index] || visualImages[index]})` }}><span className="lab-scene-label absolute bottom-3 left-3 text-xs font-medium">{title}</span></div>
-              <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">与 V1.0 平面版本关联 · 可替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
+              <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">与当前空间方向关联 · 可替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
             </Panel>)}
           </div>
         </>}
 
         {v1Tab === 'basis' && <>
           <Panel className="lab-analysis-summary mb-4">
-            <div className="flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><div className="flex items-center gap-2"><BrainCircuit size={16} /><span>AI 生成依据</span></div><p>{lab.analysis?.summary || '当前为演示方案。接入 DeepSeek 后，这里会展示与输入内容对应的分析依据。'}</p></div>{lab.analysis?.usage && <div className="lab-analysis-usage"><strong>{lab.analysis.usage.total_tokens.toLocaleString()}</strong><span>本轮 Token</span></div>}</div>
+            <div className="flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演依据</span></div><p>{lab.analysis?.summary || '当前为演示数据。接入 DeepSeek 后，这里会展示与输入材料对应的推演依据。'}</p></div>{lab.analysis?.usage && <div className="lab-analysis-usage"><strong>{lab.analysis.usage.total_tokens.toLocaleString()}</strong><span>本轮 Token</span></div>}</div>
           </Panel>
           <div className="grid gap-4 xl:grid-cols-2">
             {activeInsights.map(insight => <Panel className="lab-insight-card" key={insight.id}><div className="flex items-start justify-between gap-4"><h2 className="text-base font-semibold">{insight.title}</h2><span className="lab-tag">置信度 {insight.confidence}</span></div><p className="mt-3 text-sm leading-6 text-white/75">{insight.content}</p><p className="mt-4 border-t border-white/8 pt-3 text-[11px] leading-5 text-white/40">{insight.evidence}</p></Panel>)}
           </div>
-          <Panel className="mt-4"><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">留到模拟之后再讨论的问题</h2></div><div className="mt-4 grid gap-3 md:grid-cols-2">{activeQuestions.map((item, index) => <div className="lab-question-row" key={`${index}-${item}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></div>)}</div></Panel>
+          <Panel className="mt-4"><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">需要编剧判断、AI不能代替决定的问题</h2></div><div className="mt-4 grid gap-3 md:grid-cols-2">{activeQuestions.map((item, index) => <div className="lab-question-row" key={`${index}-${item}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></div>)}</div></Panel>
         </>}
-      </>
-    )
-
-    if (lab.step === 2) return (
-      <>
-        <StageHeading eyebrow="03 / SIMULATION DIAGNOSIS" title="模拟试玩与首轮诊断" copy="系统已经对 V1.0 运行规则、玩家行为、角色参与、线索闭环、空间动线和执行风险检查。先看问题，再进入编剧修改。" />
-        <div className="lab-metric-grid">
-          {[['68', '结构成熟度', 'V1.0 首轮基线'], ['78%', '证据覆盖', '已检查 32 项'], ['2', 'P0 阻断', '必须处理'], ['6', '玩家类型', '行为路径覆盖']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
-        </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[.8fr_1.2fr]">
-          <Panel><div className="flex items-center gap-2"><Activity size={16} className="text-[#9ce2e8]" /><h2 className="text-sm font-semibold">七维结构检查</h2></div><div className="mt-6 space-y-4">{scoreRows.map(([label, before]) => <ScoreBar label={String(label)} value={Number(before)} key={String(label)} />)}</div></Panel>
-          <Panel><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">PLAYER PATHS</p><h2 className="mt-1 text-sm font-semibold">六类玩家行为结果</h2></div><span className="lab-tag">模拟样本</span></div><div className="lab-player-grid mt-5">{players.map(([name, , result], index) => <div key={name}><div className="flex items-center justify-between gap-2"><strong>{name}</strong><span className={`lab-risk-pill ${index === 2 ? 'lab-risk-p0' : ''}`}>{index === 2 ? 'P0' : index === 0 || index === 4 ? 'P1' : '通过'}</span></div><p>{result}</p></div>)}</div></Panel>
-        </div>
-        <Panel className="mt-4"><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">建议进入编剧修改的六个问题</h2></div><div className="mt-5 grid gap-3 xl:grid-cols-2">{risks.map(([level, title, copy]) => <div className="lab-risk-row" key={title}><span className={`lab-risk-pill ${level === 'P0' ? 'lab-risk-p0' : ''}`}>{level}</span><div><strong>{title}</strong><p>{copy}</p><small>证据：规则路径模拟＋空间触发检查</small></div></div>)}</div></Panel>
       </>
     )
 
     if (lab.step === 3) return (
       <>
-        <StageHeading eyebrow="04 / WRITER REVISION" title="编剧修改与二次试玩" copy="现在才进入人工修改：围绕模拟发现的具体问题编辑真实方案，选择纳入 V1.1 的变化，再重新运行受影响路径。" />
+        <StageHeading eyebrow="04 / WRITER REVISION" title="编剧修改与二次试玩" copy="围绕首轮发生的具体事件修改原始版本。AI建议只作参考，是否修改、怎样修改仍由编剧决定。" />
         <div className="mb-4 grid gap-4 xl:grid-cols-2">
           <Panel><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false })} /></Panel>
           <Panel><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false })} /></Panel>
         </div>
         <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
-          <div><div className="mb-4"><p className="text-[10px] tracking-[.16em] text-white/40">WRITER REVISION</p><h2 className="mt-1 text-sm font-semibold">编辑真实修改内容，再纳入 V1.1</h2></div><div className="grid gap-3">{fixes.map(([id, title]) => {
-            const active = lab.fixes.includes(id)
-            return <section className={`lab-revision-card ${active ? 'lab-revision-card-active' : ''}`} key={id}><div className="flex items-center justify-between gap-4"><div><span className="lab-tag">{id === 'rule' || id === 'route' || id === 'role' ? '编剧部门' : '执行辅助'}</span><h3 className="mt-2 text-sm font-semibold">{title}</h3></div><button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button></div><textarea rows={2} value={lab.revisionDrafts[id]} onChange={event => updateRevision(id, event.target.value)} /></section>
+          <div><div className="mb-4"><p className="text-[10px] tracking-[.16em] text-white/40">WRITER REVISION</p><h2 className="mt-1 text-sm font-semibold">针对首轮具体事件编辑修改内容</h2></div><div className="grid gap-3">{activeSimulation.findings.map(finding => {
+            const active = lab.fixes.includes(finding.id)
+            return <section className={`lab-revision-card ${active ? 'lab-revision-card-active' : ''}`} key={finding.id}>
+              <div className="flex items-start justify-between gap-4">
+                <div><div className="flex flex-wrap items-center gap-2"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><small className="text-white/40">{finding.time} · {finding.actor}</small></div><h3 className="mt-2 text-sm font-semibold">{finding.event}</h3><p className="lab-revision-context">{finding.impact}</p></div>
+                <button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(finding.id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button>
+              </div>
+              <label className="lab-revision-suggestion">AI参考建议，可直接改写</label>
+              <textarea rows={2} value={lab.revisionDrafts[finding.id] || finding.suggestion} onChange={event => updateRevision(finding.id, event.target.value)} />
+            </section>
           })}</div></div>
           <Panel className="h-fit xl:sticky xl:top-6"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="mt-5 flex items-center justify-between"><div><strong className="text-4xl">68</strong><p className="mt-1 text-[11px] text-white/35">V1.0 基线</p></div><ArrowRight className="text-white/25" /><div className="text-right"><strong className="text-4xl text-[#9ce2e8]">{lab.secondTestDone ? secondScore : '—'}</strong><p className="mt-1 text-[11px] text-white/35">V1.1 验证后</p></div></div><p className="mt-6 text-xs leading-5 text-white/55">已编辑并纳入 {lab.fixes.length} 项。只有重新运行受影响路径后，分数和最终结论才会更新。</p><button type="button" className="lab-primary-button mt-6 w-full justify-center" disabled={lab.fixes.length === 0} onClick={() => updateLab({ secondTestDone: true })}><RefreshCw size={15} />运行二次模拟试玩</button>{lab.secondTestDone && <div className="mt-4 rounded-lg bg-[#8fd8df]/8 p-3 text-xs leading-5 text-[#b5eef2]"><CheckCircle2 className="mr-2 inline" size={14} />已重跑 {lab.fixes.length + 3} 条受影响路径，结果已写入 V1.1。</div>}</Panel>
         </div>
@@ -555,14 +688,14 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
 
     if (lab.step === 4) return (
       <>
-        <StageHeading eyebrow="05 / FINAL DECISION" title={readyForTabletop ? '进入真人桌面验证' : '完成关键修改后再推进'} copy="最终看板对比 V1.0 与 V1.1，展示结构质量、证据覆盖、剩余风险和真人验证任务。AI给出推进依据，但不替代编剧判断。" />
+        <StageHeading eyebrow="05 / SECOND PLAYTEST" title={readyForTabletop ? '二轮模拟通过，进入真人验证' : '二轮仍有阻断问题'} copy="对比编剧修改前后的行为变化、问题消除情况和新增风险。AI提供推进依据，但不替代编剧和导演的最终判断。" />
         <div className="lab-metric-grid">
-          {[[String(secondScore), 'V1.1 成熟度', `较基线 +${secondScore - 68}`], ['91%', '证据覆盖率', '含首轮与二次模拟'], [readyForTabletop ? '0' : lab.fixes.includes('rule') && lab.fixes.includes('route') ? '待复测' : '2', '剩余 P0', readyForTabletop ? '已清除' : '阻断推进'], [String(lab.fixes.length), '编剧修改项', '已写入 V1.1']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+          {[[String(secondScore), 'V1.1 成熟度', `较基线 +${secondScore - 68}`], [`${Math.min(98, activeSimulation.coverage + 5)}%`, '证据覆盖率', '含首轮与二次模拟'], [String(remainingBlockers), '剩余 P0', remainingBlockers === 0 ? '已清除' : '阻断推进'], [String(lab.fixes.length), '编剧修改项', '已写入 V1.1']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[.78fr_1.22fr]">
           <Panel><div className="flex items-center gap-2"><Activity size={16} className="text-[#9ce2e8]" /><h2 className="text-sm font-semibold">结构质量与验证结果</h2></div><div className="mt-6 space-y-4">{scoreRows.map(([label, before, target]) => <ScoreBar label={String(label)} value={Number(before)} after={lab.secondTestDone ? dimensionAfter(String(label), Number(before), Number(target)) : undefined} key={String(label)} />)}</div><p className="mt-6 text-[11px] leading-5 text-white/40">每项结果由规则检查、模拟路径和编剧确认共同构成；点击式修改不会直接提高分数。</p></Panel>
           <div className="space-y-4">
-            <Panel><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">VERSION DIFFERENCE</p><h2 className="mt-1 text-sm font-semibold">V1.0 → V1.1 修改证据</h2></div><span className="lab-tag">{lab.fixes.length} 项变更</span></div>{lab.fixes.length > 0 ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{fixes.filter(([id]) => lab.fixes.includes(id)).map(([id, title]) => <div className="lab-version-change" key={id}><CheckCircle2 size={15} /><div><strong>{title}</strong><p>{lab.revisionDrafts[id]}</p></div></div>)}</div> : <p className="mt-5 text-sm text-white/45">尚未形成 V1.1。返回“编剧修改”编辑真实内容并重新验证。</p>}</Panel>
+            <Panel><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">VERSION DIFFERENCE</p><h2 className="mt-1 text-sm font-semibold">V1.0 → V1.1 修改证据</h2></div><span className="lab-tag">{lab.fixes.length} 项变更</span></div>{lab.fixes.length > 0 ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).map(finding => <div className="lab-version-change" key={finding.id}><CheckCircle2 size={15} /><div><strong>{finding.actor} · {finding.time}</strong><p>{lab.revisionDrafts[finding.id]}</p></div></div>)}</div> : <p className="mt-5 text-sm text-white/45">尚未形成 V1.1。返回“编剧修改”编辑真实内容并重新验证。</p>}</Panel>
             <Panel><div className="flex items-center gap-2"><Route size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">仍需真人验证</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{['23:17 谜题难度是否适中', '调包者隐藏目标是否平衡', '集中判断阶段是否过长', '真实楼层动线是否自然', '机关手感、故障率与安全', '现场演员对异常情况的恢复能力'].map(item => <div className="lab-human-check" key={item}><span /><p>{item}</p></div>)}</div></Panel>
             <Panel className={readyForTabletop ? 'ring-1 ring-[#8fd8df]/50' : 'ring-1 ring-[#ef8b66]/35'}><div className="flex items-center justify-between gap-5"><div><p className="text-[10px] tracking-[.16em] text-white/40">NEXT GATE</p><p className="mt-2 text-base font-semibold">{readyForTabletop ? `${lab.inputs.people} 人真人桌面试玩，不直接进入完整实景` : '返回编剧修改，处理 P0 并重新运行二次模拟'}</p></div><CheckCircle2 className={readyForTabletop ? 'text-[#9ce2e8]' : 'text-[#ef8b66]'} /></div></Panel>
             <div className="flex flex-wrap gap-3"><button type="button" className="lab-primary-button" onClick={exportReport}><Download size={15} />下载决策报告</button><button type="button" className="lab-secondary-button" onClick={reset}><RefreshCw size={15} />重新开始</button></div>
@@ -576,19 +709,14 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
 
   const showNext = lab.step < stages.length - 1
   const nextLabels = [
-    connection.state === 'connected' ? '生成 V1 方案' : '连接模型后生成',
-    '运行模拟试玩',
+    connection.state === 'connected' ? '开始 AI 试玩' : '连接模型后试玩',
+    '查看诊断拆解',
     '进入编剧修改',
-    lab.secondTestDone ? '查看最终报告' : '完成二次试玩后继续',
+    lab.secondTestDone ? '查看二轮结果' : '完成二次试玩后继续',
   ]
   const handleNext = () => {
     if (lab.step === 0) {
       void runDeepSeekAnalysis()
-      return
-    }
-    if (lab.step === 1) {
-      updateLab({ playtestStarted: true })
-      go(2)
       return
     }
     next()
@@ -605,7 +733,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <nav className="mt-8 grid grid-cols-3 gap-1 sm:grid-cols-5 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
-        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />混合验证模式</span><br />DeepSeek 生成故事理解与 V1 内容方案；平面图、模拟和评分仍为可交互原型。</div>
+        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />AI 模拟实验</span><br />DeepSeek 生成首轮行为结果和诊断依据；平面图与二轮评分目前仍为交互原型。</div>
       </aside>
 
       <section className="lab-workspace">
@@ -620,7 +748,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <div className="lab-settings-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSettingsOpen(false) }}>
           <section className="lab-settings-panel" role="dialog" aria-modal="true" aria-labelledby="model-settings-title">
             <div className="lab-settings-header">
-              <div><p className="lab-settings-kicker">REASONING ENGINE</p><h2 id="model-settings-title">模型设置</h2><p>优先接入 DeepSeek，用于生成 V1 内容方案与生成依据。</p></div>
+              <div><p className="lab-settings-kicker">REASONING ENGINE</p><h2 id="model-settings-title">模型设置</h2><p>优先接入 DeepSeek，用于首轮行为模拟、风险诊断和推演依据。</p></div>
               <button type="button" aria-label="关闭模型设置" onClick={() => setSettingsOpen(false)}><X size={18} /></button>
             </div>
 
@@ -676,18 +804,26 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
           <section className="lab-analysis-panel" role="dialog" aria-modal="true" aria-labelledby="analysis-progress-title">
             {analysisRun.state === 'running' ? (
               <>
-                <div className="lab-analysis-orbit" aria-hidden="true"><BrainCircuit size={24} /></div>
-                <p className="lab-settings-kicker">DEEPSEEK REASONING</p>
-                <h2 id="analysis-progress-title">正在生成 V1 方案</h2>
-                <p className="lab-analysis-message">{analysisRun.message || '只展示处理阶段，不展示模型内部思维内容。'}</p>
-                <div className="lab-analysis-steps">
-                  {analysisSteps.map(([title, copy], index) => (
-                    <div className={index < analysisRun.step ? 'is-complete' : index === analysisRun.step ? 'is-active' : ''} key={title}>
-                      <span>{index < analysisRun.step ? <Check size={13} /> : String(index + 1).padStart(2, '0')}</span>
-                      <p><strong>{title}</strong><small>{copy}</small></p>
-                    </div>
-                  ))}
+                <div className="lab-analysis-dashboard-header">
+                  <div className="lab-analysis-orbit" aria-hidden="true"><BrainCircuit size={24} /></div>
+                  <div><p className="lab-settings-kicker">AI SIMULATION ENGINE</p><h2 id="analysis-progress-title">AI 首轮模拟正在运行</h2><p className="lab-analysis-message">{analysisRun.message || '正在把创作材料转换为可运行的结构模型。'}</p></div>
+                  <div className="lab-analysis-progress-number"><strong>{Math.round(((analysisRun.step + 1) / analysisSteps.length) * 100)}%</strong><span>分析进度</span></div>
                 </div>
+                <div className="lab-analysis-progress-track"><span style={{ width: `${((analysisRun.step + 1) / analysisSteps.length) * 100}%` }} /></div>
+                <div className="lab-engine-grid">
+                  {analysisSteps.map(([title, copy], index) => {
+                    const EngineIcon = [FileText, Users, LockKeyhole, BrainCircuit, Route, AlertTriangle][index]
+                    const state = index < analysisRun.step ? 'is-complete' : index === analysisRun.step ? 'is-active' : ''
+                    return (
+                      <div className={`lab-engine-card ${state}`} key={title}>
+                        <div className="lab-engine-icon"><EngineIcon size={17} /></div>
+                        <div><span>{String(index + 1).padStart(2, '0')}</span><strong>{title}</strong><p>{copy}</p></div>
+                        <small>{index < analysisRun.step ? analysisMetrics[index] : index === analysisRun.step ? '正在计算…' : '等待前序数据'}</small>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="lab-analysis-footnote"><Activity size={14} /><span>这里只展示任务阶段和统计结果，不展示模型内部思维过程。</span></div>
               </>
             ) : (
               <div className="lab-analysis-error">
