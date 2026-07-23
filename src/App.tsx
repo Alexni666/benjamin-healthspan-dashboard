@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronUp, Download, Eye, EyeOff, GripVertical, HelpCircle, Pencil, RotateCcw } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronUp, Download, Eye, EyeOff, GripVertical, Pencil, RotateCcw } from 'lucide-react'
 
 const backgroundVideo = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260622_044635_8daabe05-1a5c-491c-920f-4b0bd8f04812.mp4'
 const legacyLogo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8fc2d33f2b5a4bfb1fa4935fca355946f.svg'
 const defaultLogo = ''
 const defaultAvatar = 'https://polo-pecan-73837341.figma.site/_assets/v11/745de561b3ebfa8634a3483efc95f21feedd96c9.png'
 const ageTexture = 'https://polo-pecan-73837341.figma.site/_assets/v11/d8d9bd498347ea96ca4d675a624c8d90e06786e7.png'
+const insightsImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png'
+const planImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a933b0da384a5a3f8b0d9986bb919838.png'
 const storageKey = 'healthspan-simple-editor:v1'
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'scale'
@@ -18,8 +20,6 @@ type Copy = {
   brandName: string
   brandEnglish: string
   name: string
-  helpTitle: string
-  help: string
   ageLabel: string
   metric: string
   ageBadge: string
@@ -47,8 +47,6 @@ const defaultCopy: Copy = {
   brandName: 'AI内容试验场',
   brandEnglish: 'AI CONTENT LAB',
   name: '内容创新实验控制台',
-  helpTitle: '核心说明',
-  help: '让尚未成形的内容想法，先经过AI生成、模拟、测试和修改，再决定是否投入真人、场景与制作成本。',
   ageLabel: '正在孵化的实验方向',
   metric: '03',
   ageBadge: '从内容创意到可验证方案',
@@ -152,6 +150,19 @@ function ArrowButton({ dark = false, label }: { dark?: boolean; label: string })
   return <span className={`grid h-9 w-9 place-items-center rounded-full transition-transform duration-300 group-hover:translate-x-1 ${dark ? 'bg-black text-white' : 'bg-white text-black'}`} aria-label={label}><ArrowRight size={17} strokeWidth={1.7} aria-hidden="true" /></span>
 }
 
+function useAnimatedMetric(initialValue: string) {
+  const initialNumber = Number.parseInt(initialValue, 10)
+  const [value, setValue] = useState(Number.isFinite(initialNumber) ? initialNumber : 3)
+
+  useEffect(() => {
+    setValue(Number.isFinite(initialNumber) ? initialNumber : 3)
+    const interval = window.setInterval(() => setValue(current => (current + 1) % 100), 1800)
+    return () => window.clearInterval(interval)
+  }, [initialNumber])
+
+  return String(value).padStart(2, '0')
+}
+
 function RulerTicker() {
   const ticks = Array.from({ length: 61 })
   return (
@@ -168,8 +179,8 @@ export default function App() {
   const logoInput = useRef<HTMLInputElement>(null)
   const avatarInput = useRef<HTMLInputElement>(null)
   const [data, setData] = useState<EditorData>(loadEditorData)
+  const animatedMetric = useAnimatedMetric(data.copy.metric)
   const [videoReady, setVideoReady] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draggedCard, setDraggedCard] = useState<CardId | null>(null)
   const editorAvailable = new URLSearchParams(window.location.search).get('edit') === '1'
@@ -263,13 +274,13 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} color-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl border border-white/20 bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: 'linear-gradient(115deg, #e36545 0%, #e8a26f 50%, #81cad4 100%)' }}>
+    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
       <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始 AI 内容推理实验" /></span>
     </article>
-    return <article className={`${shared} color-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl border border-white/20 bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: 'linear-gradient(115deg, #4aa9b8 0%, #8f879c 46%, #e0613d 100%)' }}>
+    return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
@@ -324,10 +335,6 @@ export default function App() {
             </span>
           </div>
           <input ref={logoInput} type="file" accept="image/*" hidden onChange={event => { loadImage(event.target.files?.[0], 'logo'); event.target.value = '' }} />
-          <div className="absolute left-1/2 top-8 -translate-x-1/2 sm:top-10">
-            <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/20 text-white backdrop-blur-xl transition-colors hover:bg-black/40" aria-label="Show dashboard help" aria-expanded={helpOpen} onClick={() => setHelpOpen(open => !open)}><HelpCircle size={18} strokeWidth={1.5} /></button>
-            <div className={`absolute left-1/2 top-12 w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-black/80 p-4 text-left text-xs leading-relaxed text-white/70 backdrop-blur-2xl transition-all sm:w-80 ${helpOpen || editing ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-2 opacity-0'}`}><EditableText value={data.copy.helpTitle} editing={editing} onChange={value => setCopy('helpTitle', value)} className="mb-2 block font-semibold text-[#EFCE96]" /><EditableText value={data.copy.help} editing={editing} onChange={value => setCopy('help', value)} multiline /></div>
-          </div>
           <div className="flex items-center gap-3 sm:gap-4">
             <EditableText value={data.copy.name} editing={editing} onChange={value => setCopy('name', value)} className="hidden max-w-[300px] text-right text-sm font-semibold leading-snug md:block lg:text-xl" />
             <button type="button" className="avatar-editor relative rounded-full" disabled={!editing} onClick={() => avatarInput.current?.click()} aria-label="更换头像">
@@ -344,12 +351,12 @@ export default function App() {
           <section className="w-full sm:w-[520px] lg:w-[620px]" aria-labelledby="age-title">
             <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px] xl:h-[450px]">
               <div className="animate-spin-bg absolute inset-[-5%] bg-cover bg-center" style={{ backgroundImage: `url(${ageTexture})` }} /><div className="age-glow absolute inset-0" />
-              <div className="relative z-10 flex max-w-[82%] flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]"><EditableText value={data.copy.metric} editing={editing} onChange={value => setCopy('metric', value)} /></strong></AnimatedElement></div>
+              <div className="relative z-10 flex max-w-[82%] flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]"><EditableText value={editing ? data.copy.metric : animatedMetric} editing={editing} onChange={value => setCopy('metric', value)} /></strong></AnimatedElement></div>
             </div></AnimatedElement>
             <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="max-w-full rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-center text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
             {renderRegion('ageBottom', 'mt-6')}
           </section>
-          {renderRegion('side', 'w-full xl:w-[430px] xl:max-w-[38vw] xl:-translate-y-10')}
+          {renderRegion('side', 'w-full xl:w-[430px] xl:max-w-[38vw] xl:translate-y-6')}
         </div>
         {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>

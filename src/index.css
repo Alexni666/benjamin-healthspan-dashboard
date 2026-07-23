@@ -51,7 +51,7 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .avatar-editor:disabled, .logo-editor:disabled { cursor: default; }
 .avatar-editor:not(:disabled), .logo-editor:not(:disabled) { outline: 1px dashed rgba(239, 206, 150, .9); outline-offset: .25rem; }
 .editor-card { transition: opacity .2s ease, filter .2s ease; }
-.color-card { box-shadow: 0 24px 70px rgba(226, 104, 66, .18); text-shadow: 0 1px 12px rgba(0, 0, 0, .28); }
+.experiment-card { box-shadow: 0 20px 58px rgba(0, 0, 0, .22); text-shadow: 0 1px 10px rgba(0, 0, 0, .25); filter: saturate(1.08); }
 .is-editing .editor-card { outline: 1px dashed rgba(239, 206, 150, .62); outline-offset: .25rem; cursor: grab; }
 .is-editing .editor-card:active { cursor: grabbing; }
 .editor-card-hidden { opacity: .38; filter: grayscale(.8); }
@@ -62,7 +62,9 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .region-label { position: absolute; z-index: 40; top: -.65rem; left: 1rem; border: 1px solid rgba(239, 206, 150, .55); border-radius: 999px; padding: .25rem .55rem; color: #f7ddb1; background: rgba(12,12,12,.88); font-size: .62rem; font-weight: 700; }
 .region-empty { grid-column: 1 / -1; align-self: center; justify-self: center; color: rgba(255,255,255,.45); font-size: .68rem; }
 
-.editor-panel { position: fixed; z-index: 100; right: 1rem; bottom: 1rem; display: flex; width: min(360px, calc(100vw - 2rem)); max-height: calc(100svh - 2rem); flex-direction: column; align-items: flex-end; gap: .65rem; }
+.editor-panel { position: fixed; z-index: 100; right: 1rem; bottom: 1rem; display: flex; width: min(320px, calc(100vw - 2rem)); max-height: calc(100svh - 2rem); flex-direction: column; align-items: flex-end; gap: .65rem; }
+.editor-panel-open { right: auto; left: 1rem; align-items: flex-start; }
+.editor-panel-open .editor-options { order: -1; }
 .editor-main-button { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: .78rem 1rem; color: #0a0a0a; background: #efce96; box-shadow: 0 14px 42px rgba(0,0,0,.38); font-size: .78rem; font-weight: 700; }
 .editor-options { width: 100%; overflow-y: auto; border: 1px solid rgba(255,255,255,.14); border-radius: 1.25rem; padding: 1rem; color: white; background: rgba(12,12,12,.88); box-shadow: 0 18px 58px rgba(0,0,0,.42); backdrop-filter: blur(24px); }
 .editor-options strong, .editor-options small { display: block; }
