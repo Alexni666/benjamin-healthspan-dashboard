@@ -26,10 +26,19 @@ import {
 } from 'lucide-react'
 
 const storageKey = 'ai-reasoning-lab-demo:v4'
+const spaceDirectionImages: Record<string, string> = {
+  A: '/images/reasoning-lab/space-direction-a.jpg',
+  B: '/images/reasoning-lab/space-direction-b.jpg',
+}
+const spaceStructureImages = [
+  '/images/reasoning-lab/space-structure-overview.jpg',
+  '/images/reasoning-lab/space-structure-floor-plan.jpg',
+  '/images/reasoning-lab/space-structure-key-area.jpg',
+]
 const visualImages = [
-  'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png',
-  'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a933b0da384a5a3f8b0d9986bb919838.png',
-  'https://polo-pecan-73837341.figma.site/_assets/v11/d8d9bd498347ea96ca4d675a624c8d90e06786e7.png',
+  '/images/reasoning-lab/scene-information-exchange.jpg',
+  '/images/reasoning-lab/scene-core-mechanism.jpg',
+  '/images/reasoning-lab/scene-climax-archive.jpg',
 ]
 
 type CharacterInput = {
@@ -280,23 +289,6 @@ function StageHeading({ eyebrow, title, copy, singleLine = false }: { eyebrow: s
   )
 }
 
-function PlanSketch({ variant }: { variant: string }) {
-  const rooms = variant === 'A'
-    ? [[35, 35, 130, 80], [5, 5, 68, 23], [92, 5, 68, 23], [5, 122, 68, 23], [92, 122, 68, 23]]
-    : variant === 'B'
-      ? [[8, 18, 55, 45], [70, 18, 55, 45], [132, 18, 35, 110], [70, 83, 55, 45], [8, 83, 55, 45]]
-      : [[8, 10, 72, 55], [90, 10, 72, 55], [8, 78, 72, 55], [90, 78, 72, 55]]
-  return (
-    <svg viewBox="0 0 175 155" className="h-full w-full" role="img" aria-label={`${variant} 方案平面示意`}>
-      <rect x="1" y="1" width="173" height="153" rx="8" fill="rgba(3,8,11,.5)" stroke="rgba(255,255,255,.12)" />
-      {rooms.map(([x, y, w, h], index) => <rect key={index} x={x} y={y} width={w} height={h} rx="3" fill={index === 0 ? 'rgba(239,184,118,.24)' : 'rgba(119,209,220,.11)'} stroke={index === 0 ? '#efb876' : 'rgba(141,221,230,.55)'} strokeWidth="1.2" />)}
-      <path d={variant === 'A' ? 'M87 35V16M87 115v27M35 75H15M165 75h-35' : variant === 'B' ? 'M63 41h7M125 41h7M63 105h7M125 105h7' : 'M80 37h10M80 105h10M45 65v13M126 65v13'} stroke="#f5d3a4" strokeWidth="2" strokeDasharray="3 3" />
-      <circle cx={variant === 'A' ? 100 : 148} cy={variant === 'A' ? 74 : 111} r="5" fill="#ef7e51" />
-      <circle cx={variant === 'C' ? 46 : 55} cy={variant === 'C' ? 105 : 45} r="4" fill="#87d5df" />
-    </svg>
-  )
-}
-
 function ScoreBar({ label, value, after }: { label: string; value: number; after?: number }) {
   return (
     <div className="grid grid-cols-[88px_1fr_34px] items-center gap-3 text-xs">
@@ -380,6 +372,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const activeV1 = lab.analysis?.v1 || demoV1
   const activeSimulation = lab.analysis?.simulation || demoSimulation
   const activePlans = activeV1.spaceDirections.length === 2 ? activeV1.spaceDirections : plans
+  const blockerFindings = activeSimulation.findings.filter(finding => finding.level === 'P0')
   const findingWeight = (finding: SimulationFinding) => finding.level === 'P0' ? 6 : finding.level === 'P1' ? 3 : 1
   const totalFindingWeight = activeSimulation.findings.reduce((total, finding) => total + findingWeight(finding), 0)
   const selectedFindingWeight = activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).reduce((total, finding) => total + findingWeight(finding), 0)
@@ -518,7 +511,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       '',
       '仍需真人验证：23:17 谜题难度、隐藏角色平衡、听证时长、真实动线、机关手感与安全。',
       '',
-      `说明：首轮行为结果和诊断依据${lab.analysis ? '来自 DeepSeek 本轮真实生成' : '当前使用演示样本'}；平面图和二轮评分仍为交互原型，需要编剧、导演与真人试玩验证。`,
+      `说明：首轮行为结果和诊断依据${lab.analysis ? '来自本轮模型分析' : '当前使用演示样本'}；平面图和二轮评分仍为交互原型，需要编剧、导演与真人试玩验证。`,
     ].join('\n')
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
@@ -578,51 +571,51 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <StageHeading eyebrow="02 / FIRST PLAYTEST" title="首轮模拟试玩结果" copy="先看模拟中真实发生的事件，再决定是否展开内容、空间和推演依据。这里不替编剧评价作品，只呈现可复查的行为结果。" />
         <Panel className="lab-result-hero">
           <div>
-            <div className="lab-result-status"><span /><strong>首轮模拟完成</strong><small>{lab.analysis ? 'DEEPSEEK LIVE RUN' : 'DEMO RUN'}</small></div>
+            <div className="lab-result-status"><span /><strong>首轮模拟完成</strong></div>
             <h2>{activeSimulation.verdict}</h2>
             <p>{activeSimulation.headline}</p>
-            <small className="lab-result-score-reason">{activeSimulation.scoreReason || '当前显示的是旧版分析基线；重新运行 DeepSeek 分析后，会生成本轮评分依据。'}</small>
+            <small className="lab-result-score-reason">{activeSimulation.scoreReason || '当前显示的是首轮分析基线；重新运行分析后，会生成本轮评分依据。'}</small>
           </div>
           <div className="lab-result-score">
-            <span>首轮可运行度</span>
+            <span>首轮综合评分</span>
             <div><strong>{firstScore}</strong><small>/ 100</small></div>
             <b>{firstRating}</b>
           </div>
         </Panel>
 
-        <div className="lab-metric-grid mt-4">
-          {[
-            [String(activeSimulation.pathCount), 'AI 模拟路线', '不同玩家选择形成的行动路线数量'],
-            [String(activeSimulation.checks), '检查项目', '规则、线索、角色任务与结局条件'],
-            [String(activeSimulation.blockers), '必须先修的问题', '可能造成卡关、绕过规则或提前结束'],
-            [`${activeSimulation.coverage}%`, '资料覆盖', '本轮实际引用到的输入内容比例'],
-          ].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && activeSimulation.blockers > 0 ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+        <div className="lab-result-nav-grid mt-4">
+          <a className="lab-result-link-card" href="#playtest-findings"><div><Route size={15} /><span>关键事件</span></div><strong>{activeSimulation.findings.length}<small>项</small></strong><p>查看发生时间、玩家行为和实际影响</p><b>查看事件 <ArrowRight size={13} /></b></a>
+          <a className="lab-result-link-card lab-result-link-card-alert" href={blockerFindings.length > 0 ? '#playtest-blockers' : '#playtest-findings'}><div><AlertTriangle size={15} /><span>必须先修</span></div><strong>{blockerFindings.length}<small>项</small></strong><p>直达会造成卡关或提前结束的问题</p><b>定位问题 <ArrowRight size={13} /></b></a>
+          <a className="lab-result-link-card" href="#playtest-timeline"><div><Clock3 size={15} /><span>时间线</span></div><strong>{activeSimulation.timeline.length}<small>个节点</small></strong><p>查看问题具体发生在试玩的哪个阶段</p><b>查看时间线 <ArrowRight size={13} /></b></a>
+          <a className="lab-result-link-card" href="#playtest-players"><div><Users size={15} /><span>玩家表现</span></div><strong>{activeSimulation.playerRuns.length}<small>类</small></strong><p>逐类查看行为选择、结果与阻断状态</p><b>查看玩家结果 <ArrowRight size={13} /></b></a>
         </div>
 
-        <div className="lab-section-title mt-8"><div><p>CONCRETE EVENTS</p><h2>首轮中实际发生的关键事件</h2></div><span>{activeSimulation.findings.length} 项反馈</span></div>
-        <Panel className="lab-findings-panel">
-          {activeSimulation.findings.map((finding, index) => (
-            <article className="lab-finding-row" key={finding.id}>
-              <div className="lab-finding-order">{String(index + 1).padStart(2, '0')}</div>
-              <div className="lab-finding-meta"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><strong>{finding.time}</strong><small>{finding.actor}</small></div>
-              <div className="lab-finding-event"><strong>{finding.event}</strong><p>{finding.impact}</p><small>{finding.evidence}</small></div>
-            </article>
-          ))}
-        </Panel>
+        <div id="playtest-findings" className="lab-result-anchor">
+          <div className="lab-section-title mt-8"><div><p>CONCRETE EVENTS</p><h2>首轮中实际发生的关键事件</h2></div><span>{activeSimulation.findings.length} 项反馈</span></div>
+          <Panel className="lab-findings-panel">
+            {activeSimulation.findings.map((finding, index) => (
+              <article id={finding.id === blockerFindings[0]?.id ? 'playtest-blockers' : undefined} className="lab-finding-row" key={finding.id}>
+                <div className="lab-finding-order">{String(index + 1).padStart(2, '0')}</div>
+                <div className="lab-finding-meta"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><strong>{finding.time}</strong><small>{finding.actor}</small></div>
+                <div className="lab-finding-event"><strong>{finding.event}</strong><p>{finding.impact}</p><small>{finding.evidence}</small></div>
+              </article>
+            ))}
+          </Panel>
+        </div>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[.82fr_1.18fr]">
-          <Panel>
-            <div className="lab-section-title"><div><p>RUN TIMELINE</p><h2>{lab.inputs.duration} 模拟时间线</h2></div></div>
-            <div className="lab-run-timeline">
-              {activeSimulation.timeline.map(item => <div key={`${item.time}-${item.event}`}><span>{item.time}</span><strong>{item.event}</strong><p>{item.outcome}</p></div>)}
-            </div>
-          </Panel>
-          <Panel>
-            <div className="lab-section-title"><div><p>PLAYER PATHS</p><h2>六类玩家行为结果</h2></div><span>逐类可复查</span></div>
-            <div className="lab-player-grid mt-5">
-              {activeSimulation.playerRuns.map(player => <div key={player.type}><div className="flex items-center justify-between gap-2"><strong>{player.type}</strong><span className={`lab-risk-pill ${player.status === '阻断' ? 'lab-risk-p0' : ''}`}>{player.status}</span></div><small>{player.behavior}</small><p>{player.result}</p></div>)}
-            </div>
-          </Panel>
+          <div id="playtest-timeline" className="lab-result-anchor"><Panel>
+              <div className="lab-section-title"><div><p>RUN TIMELINE</p><h2>{lab.inputs.duration} 模拟时间线</h2></div></div>
+              <div className="lab-run-timeline">
+                {activeSimulation.timeline.map(item => <div key={`${item.time}-${item.event}`}><span>{item.time}</span><strong>{item.event}</strong><p>{item.outcome}</p></div>)}
+              </div>
+            </Panel></div>
+          <div id="playtest-players" className="lab-result-anchor"><Panel>
+              <div className="lab-section-title"><div><p>PLAYER PATHS</p><h2>玩家行为结果</h2></div><span>逐类可复查</span></div>
+              <div className="lab-player-grid mt-5">
+                {activeSimulation.playerRuns.map(player => <div key={player.type}><div className="flex items-center justify-between gap-2"><strong>{player.type}</strong><span className={`lab-risk-pill ${player.status === '阻断' ? 'lab-risk-p0' : ''}`}>{player.status}</span></div><small>{player.behavior}</small><p>{player.result}</p></div>)}
+              </div>
+            </Panel></div>
         </div>
 
         <div className="lab-result-note"><ShieldCheck size={15} /><p>本页记录的是 AI 结构模拟中发生的现象，不等同于真人体验结论。下一步可以查看每项现象背后的内容、空间和规则依据。</p></div>
@@ -634,7 +627,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <StageHeading eyebrow="03 / DIAGNOSIS" title="结果背后的诊断拆解" copy="AI只重建推演模型并解释首轮现象，不会自动改写原稿。普通导演可以先看结论，编剧可继续深入内容结构、空间影响和推演依据。" />
         <Panel className="lab-v1-hero mb-4">
           <div>
-            <div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演模型 · {lab.analysis ? 'DEEPSEEK GENERATED' : 'DEMO MODEL'}</span></div>
+            <div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演模型 · {lab.analysis ? '已生成' : '演示方案'}</span></div>
             <h2>{activeV1.title}</h2>
             <p>{activeV1.logline}</p>
           </div>
@@ -664,7 +657,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
           <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SPACE DIRECTION</p><h2 className="mt-1 text-sm font-semibold">由首轮行为问题带出的两套空间方向</h2></div><span className="lab-tag">当前选择 {lab.selectedPlan}</span></div>
           <div className="grid gap-4 xl:grid-cols-2">
             {activePlans.map(plan => <button type="button" className={`lab-plan-card ${lab.selectedPlan === plan.id ? 'lab-plan-card-selected' : ''}`} onClick={() => updateLab({ selectedPlan: plan.id, confirmedPlan: lab.confirmedPlan === plan.id ? lab.confirmedPlan : '' })} key={plan.id}>
-              <div className="lab-plan-sketch"><PlanSketch variant={plan.id} /></div>
+              <div className="lab-plan-sketch"><img src={spaceDirectionImages[plan.id] || spaceDirectionImages.A} alt={`${plan.title}空间方向示意`} loading="lazy" /></div>
               <div className="mt-5 flex items-start justify-between"><div><span className="text-xs text-[#efb876]">方案 {plan.id}</span><h2 className="mt-1 text-lg font-semibold">{plan.title}</h2></div>{lab.selectedPlan === plan.id && <CheckCircle2 className="text-[#8fd8df]" size={20} />}</div>
               <p className="mt-3 text-xs tracking-[.12em] text-white/35">{plan.meta}</p><p className="mt-3 text-sm leading-6 text-white/55">{plan.copy}</p>
             </button>)}
@@ -680,13 +673,13 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
                 ['总体空间关系图', '入口、公共区、搜证区、高潮区与后勤区的连接关系'],
                 ['主要楼层平面图', '房间尺度、玩家路线、工作人员路线与楼层连接'],
                 ['关键区域详图', '核心机关、隐藏通道与高潮区域的触发和安全范围'],
-              ].map(([title, copy], index) => <Panel key={title}><div className="lab-plan-preview"><PlanSketch variant={lab.selectedPlan} /></div><div className="mt-4 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-[11px] leading-5 text-white/40">{copy}</p></div><span className="lab-tag">{String(index + 1).padStart(2, '0')}</span></div></Panel>)}
+              ].map(([title, copy], index) => <Panel key={title}><div className="lab-plan-preview"><img src={spaceStructureImages[index]} alt={title} loading="lazy" /></div><div className="mt-4 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-[11px] leading-5 text-white/40">{copy}</p></div><span className="lab-tag">{String(index + 1).padStart(2, '0')}</span></div></Panel>)}
             </div>
-            <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">效果图占位与人工替换</h2></div>
+            <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">空间效果图与人工替换</h2></div>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {['信息交换区', '核心机关区', '高潮与结局区'].map((title, index) => <Panel key={title}>
                 <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-cover bg-center" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(3,5,6,.72)), url(${uploads[index] || visualImages[index]})` }}><span className="lab-scene-label absolute bottom-3 left-3 text-xs font-medium">{title}</span></div>
-                <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">图片模型未接入 · 可手动替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
+                <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">AI 空间效果图 · 可手动替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
               </Panel>)}
             </div>
           </>}
@@ -694,7 +687,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
 
         {v1Tab === 'basis' && <>
           <Panel className="lab-analysis-summary mb-4">
-            <div className="flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演依据</span></div><p>{lab.analysis?.summary || '当前为演示数据。接入 DeepSeek 后，这里会展示与输入材料对应的推演依据。'}</p></div>{lab.analysis?.usage && <div className="lab-analysis-usage"><strong>{lab.analysis.usage.total_tokens.toLocaleString()}</strong><span>本轮 Token</span></div>}</div>
+            <div className="flex flex-wrap items-start justify-between gap-4"><div className="max-w-3xl"><div className="flex items-center gap-2"><BrainCircuit size={16} /><span>首轮推演依据</span></div><p>{lab.analysis?.summary || '当前为演示数据。运行真实分析后，这里会展示与输入材料对应的推演依据。'}</p></div>{lab.analysis?.usage && <div className="lab-analysis-usage"><strong>{lab.analysis.usage.total_tokens.toLocaleString()}</strong><span>本轮 Token</span></div>}</div>
           </Panel>
           <div className="grid gap-4 xl:grid-cols-2">
             {activeInsights.map(insight => <Panel className="lab-insight-card" key={insight.id}><div className="flex items-start justify-between gap-4"><h2 className="text-base font-semibold">{insight.title}</h2><span className="lab-tag">置信度 {insight.confidence}</span></div><p className="mt-3 text-sm leading-6 text-white/75">{insight.content}</p><p className="mt-4 border-t border-white/8 pt-3 text-[11px] leading-5 text-white/40">{insight.evidence}</p></Panel>)}
