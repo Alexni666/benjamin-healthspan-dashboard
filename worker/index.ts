@@ -218,6 +218,8 @@ function parseAnalysis(value: unknown) {
   const simulation = {
     verdict: cleanText(rawSimulation.verdict, 160),
     headline: cleanText(rawSimulation.headline, 600),
+    score: Math.max(1, Math.min(100, Number(rawSimulation.score) || 60)),
+    scoreReason: cleanText(rawSimulation.scoreReason, 500),
     pathCount: Math.max(1, Math.min(999, Number(rawSimulation.pathCount) || 1)),
     checks: Math.max(1, Math.min(999, Number(rawSimulation.checks) || 1)),
     coverage: Math.max(1, Math.min(100, Number(rawSimulation.coverage) || 1)),
@@ -340,9 +342,9 @@ export default {
                 content: `你是服务专业编剧和导演部门的 AI 内容模拟实验室。用户提交的是他们自己的原始创作版本；你的工作是建立内部推演模型、模拟玩家行为并报告具体发生的事件，不是替用户重写作品。
 
 请只输出合法 JSON，不要 Markdown。JSON 结构必须为：
-{"summary":"本轮推演依据概述","simulation":{"verdict":"一句话推进建议","headline":"一句话说明首轮最重要的实际现象","pathCount":36,"checks":32,"coverage":86,"blockers":2,"findings":[{"id":"ending-bypass","level":"P0|P1|观察","time":"发生时点","actor":"哪类玩家或哪些角色","event":"模拟中具体发生了什么","impact":"这个事件造成的实际影响","evidence":"由哪条输入、规则关系或行为路径触发","suggestion":"只作为参考、可由编剧改写的具体修改建议"}],"playerRuns":[{"type":"玩家策略类型","behavior":"采用的行为策略","result":"这类玩家在模拟中的具体结果","status":"阻断|风险|通过"}],"timeline":[{"time":"时间区间","event":"阶段或事件","outcome":"这个阶段实际出现的结果"}]},"insights":[{"id":"premise","title":"核心命题","content":"分析内容","evidence":"明确引用哪项输入并指出缺口","confidence":"高|中|待确认"}],"questions":["必须由编剧判断的问题"],"model":{"title":"原始内容的推演模型名称","logline":"一句话描述系统如何理解原始体验","beats":["按时间顺序的体验阶段"],"roleDesign":"人物目标、秘密、权限与信息差的结构重建","clueChain":"证据链、验证逻辑与结局条件","mechanics":"机关触发、分支与核心玩法规则","recovery":"卡关、误解或机关失败时的恢复路径","spaceDirections":[{"title":"由首轮问题带出的空间方向","meta":"方向侧重点","copy":"空间组织方式及其与首轮行为问题的关系"}]}}
+{"summary":"本轮推演依据概述","simulation":{"verdict":"一句话推进建议","headline":"一句话说明首轮最重要的实际现象","score":68,"scoreReason":"说明评分最主要的加分与扣分依据","pathCount":36,"checks":32,"coverage":86,"blockers":2,"findings":[{"id":"ending-bypass","level":"P0|P1|观察","time":"发生时点","actor":"哪类玩家或哪些角色","event":"模拟中具体发生了什么","impact":"这个事件造成的实际影响","evidence":"由哪条输入、规则关系或行为路径触发","suggestion":"只作为参考、可由编剧改写的具体修改建议"}],"playerRuns":[{"type":"玩家策略类型","behavior":"采用的行为策略","result":"这类玩家在模拟中的具体结果","status":"阻断|风险|通过"}],"timeline":[{"time":"时间区间","event":"阶段或事件","outcome":"这个阶段实际出现的结果"}]},"insights":[{"id":"premise","title":"核心命题","content":"分析内容","evidence":"明确引用哪项输入并指出缺口","confidence":"高|中|待确认"}],"questions":["必须由编剧判断的问题"],"model":{"title":"原始内容的推演模型名称","logline":"一句话描述系统如何理解原始体验","beats":["按时间顺序的体验阶段"],"roleDesign":"人物目标、秘密、权限与信息差的结构重建","clueChain":"证据链、验证逻辑与结局条件","mechanics":"机关触发、分支与核心玩法规则","recovery":"卡关、误解或机关失败时的恢复路径","spaceDirections":[{"title":"由首轮问题带出的空间方向","meta":"方向侧重点","copy":"空间组织方式及其与首轮行为问题的关系"}]}}
 
-simulation.findings 必须输出 6 项具体事件，禁止只写“节奏不足、角色参与度低”这类抽象评价；每项必须包含发生时间、行为主体、具体动作、实际后果和触发证据。playerRuns 必须输出 6 种明显不同的玩家策略。timeline 输出 5 至 7 个连续时间阶段。pathCount、checks、coverage 和 blockers 应与本轮实际分析规模一致，不要机械使用示例数字。
+simulation.score 必须是 0 至 100 的首轮可运行度评分，只衡量主线可完成性、规则闭环、角色参与、节奏与异常恢复，不评价故事创作水平，也不得机械使用示例数字。scoreReason 必须用一句话解释主要加分项与扣分项。simulation.findings 必须输出 6 项具体事件，禁止只写“节奏不足、角色参与度低”这类抽象评价；每项必须包含发生时间、行为主体、具体动作、实际后果和触发证据。playerRuns 必须输出 6 种明显不同的玩家策略。timeline 输出 5 至 7 个连续时间阶段。pathCount、checks、coverage 和 blockers 应与本轮实际分析规模一致，不要机械使用示例数字。
 
 insights 必须恰好 6 项并依次覆盖：核心命题、主冲突结构、世界与规则边界、人物关系动力、戏剧时间线、体验目标。每项 evidence 必须说明输入依据；无法确定时写待确认。model.beats 输出 5 至 8 个名称简短的节点。spaceDirections 必须恰好输出 2 个方向：第一项为“集中控制型”，重点解决控场、拍摄、人员调度和信息汇合；第二项为“探索强化型”，重点解决分层探索、隐藏区域、发现感和行动路径。两项都要明确回应首轮出现的行动或空间问题。questions 输出 3 至 6 个真正需要编剧决定、AI不能代替判断的问题。
 

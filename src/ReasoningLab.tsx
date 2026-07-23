@@ -85,6 +85,8 @@ type PlayerRun = {
 type SimulationResult = {
   verdict: string
   headline: string
+  score: number
+  scoreReason: string
   pathCount: number
   checks: number
   coverage: number
@@ -163,6 +165,8 @@ const demoV1: V1Draft = {
 const demoSimulation: SimulationResult = {
   verdict: '修改两项阻断问题后，再进入真人试玩',
   headline: '故事主线可以跑通，但结局条件和唯一通路会让部分玩家提前结束或完全卡住。',
+  score: 68,
+  scoreReason: '主线具备完整起承转合，但结局条件、异常恢复和部分角色的前段参与仍会影响实际完成度。',
   pathCount: 36,
   checks: 32,
   coverage: 86,
@@ -356,8 +360,10 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const findingWeight = (finding: SimulationFinding) => finding.level === 'P0' ? 6 : finding.level === 'P1' ? 3 : 1
   const totalFindingWeight = activeSimulation.findings.reduce((total, finding) => total + findingWeight(finding), 0)
   const selectedFindingWeight = activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).reduce((total, finding) => total + findingWeight(finding), 0)
-  const simulatedScore = Math.min(89, Math.round(68 + 21 * (selectedFindingWeight / Math.max(1, totalFindingWeight))))
-  const secondScore = lab.secondTestDone ? simulatedScore : 68
+  const firstScore = activeSimulation.score || 68
+  const firstRating = firstScore >= 85 ? '接近真人验证' : firstScore >= 70 ? '基本可运行' : firstScore >= 55 ? '可运行，需修复' : '结构尚未闭合'
+  const simulatedScore = Math.min(89, Math.round(firstScore + (89 - firstScore) * (selectedFindingWeight / Math.max(1, totalFindingWeight))))
+  const secondScore = lab.secondTestDone ? simulatedScore : firstScore
   const remainingBlockers = activeSimulation.findings.filter(finding => finding.level === 'P0' && !lab.fixes.includes(finding.id)).length
   const readyForTabletop = lab.secondTestDone && remainingBlockers === 0 && secondScore >= 79
   const updateRevision = (id: string, value: string) => updateLab({ revisionDrafts: { ...lab.revisionDrafts, [id]: value }, secondTestDone: false })
@@ -545,16 +551,21 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
             <div className="lab-result-status"><span /><strong>首轮模拟完成</strong><small>{lab.analysis ? 'DEEPSEEK LIVE RUN' : 'DEMO RUN'}</small></div>
             <h2>{activeSimulation.verdict}</h2>
             <p>{activeSimulation.headline}</p>
+            <small className="lab-result-score-reason">{activeSimulation.scoreReason}</small>
           </div>
-          <div className="lab-result-coverage"><strong>{activeSimulation.coverage}%</strong><span>本轮资料覆盖</span><small>其余内容按模拟假设处理</small></div>
+          <div className="lab-result-score">
+            <span>首轮可运行度</span>
+            <div><strong>{firstScore}</strong><small>/ 100</small></div>
+            <b>{firstRating}</b>
+          </div>
         </Panel>
 
         <div className="lab-metric-grid mt-4">
           {[
-            [String(activeSimulation.pathCount), '行为路径', '不同策略与理解方式'],
-            [String(activeSimulation.checks), '结构检查', '规则、线索与空间'],
-            [String(activeSimulation.blockers), '阻断事件', '必须优先处理'],
-            [lab.inputs.people, '故事角色', `${activeSimulation.playerRuns.length} 类玩家策略`],
+            [String(activeSimulation.pathCount), 'AI 模拟路线', '不同玩家选择形成的行动路线数量'],
+            [String(activeSimulation.checks), '检查项目', '规则、线索、角色任务与结局条件'],
+            [String(activeSimulation.blockers), '必须先修的问题', '可能造成卡关、绕过规则或提前结束'],
+            [`${activeSimulation.coverage}%`, '资料覆盖', '本轮实际引用到的输入内容比例'],
           ].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && activeSimulation.blockers > 0 ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
         </div>
 
@@ -666,23 +677,27 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     if (lab.step === 3) return (
       <>
         <StageHeading eyebrow="04 / WRITER REVISION" title="编剧修改与二次试玩" copy="围绕首轮发生的具体事件修改原始版本。AI建议只作参考，是否修改、怎样修改仍由编剧决定。" />
-        <div className="mb-4 grid gap-4 xl:grid-cols-2">
+        <div className="lab-revision-brief mb-5">
+          <div className="lab-revision-brief-heading"><span>REVISION BRIEF</span><h2>先确定本轮修改边界</h2><p>编剧意图优先，执行限制只约束落地方式。</p></div>
           <Panel><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false })} /></Panel>
           <Panel><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false })} /></Panel>
         </div>
-        <div className="grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
-          <div><div className="mb-4"><p className="text-[10px] tracking-[.16em] text-white/40">WRITER REVISION</p><h2 className="mt-1 text-sm font-semibold">针对首轮具体事件编辑修改内容</h2></div><div className="grid gap-3">{activeSimulation.findings.map(finding => {
+        <div className="lab-revision-workspace">
+          <div><div className="mb-4"><p className="text-[10px] tracking-[.16em] text-white/40">WRITER REVISION</p><h2 className="mt-1 text-sm font-semibold">针对首轮具体事件编辑修改内容</h2></div><div className="lab-revision-grid">{activeSimulation.findings.map((finding, index) => {
             const active = lab.fixes.includes(finding.id)
             return <section className={`lab-revision-card ${active ? 'lab-revision-card-active' : ''}`} key={finding.id}>
-              <div className="flex items-start justify-between gap-4">
-                <div><div className="flex flex-wrap items-center gap-2"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><small className="text-white/40">{finding.time} · {finding.actor}</small></div><h3 className="mt-2 text-sm font-semibold">{finding.event}</h3><p className="lab-revision-context">{finding.impact}</p></div>
-                <button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(finding.id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button>
+              <div className="lab-revision-card-header">
+                <span className="lab-revision-index">{String(index + 1).padStart(2, '0')}</span>
+                <div className="flex flex-wrap items-center gap-2"><span className={`lab-risk-pill ${finding.level === 'P0' ? 'lab-risk-p0' : ''}`}>{finding.level}</span><small>{finding.time} · {finding.actor}</small></div>
               </div>
-              <label className="lab-revision-suggestion">AI参考建议，可直接改写</label>
-              <textarea rows={2} value={lab.revisionDrafts[finding.id] || finding.suggestion} onChange={event => updateRevision(finding.id, event.target.value)} />
+              <h3>{finding.event}</h3>
+              <div className="lab-revision-impact"><span>模拟影响</span><p>{finding.impact}</p></div>
+              <label className="lab-revision-suggestion"><span>编剧修改</span><small>AI建议仅作为起点，可以直接改写</small></label>
+              <textarea rows={3} value={lab.revisionDrafts[finding.id] || finding.suggestion} onChange={event => updateRevision(finding.id, event.target.value)} />
+              <div className="lab-revision-card-footer"><span>{active ? '将进入 V1.1 二次验证' : '当前不改变原始版本'}</span><button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(finding.id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button></div>
             </section>
           })}</div></div>
-          <Panel className="h-fit xl:sticky xl:top-6"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="mt-5 flex items-center justify-between"><div><strong className="text-4xl">68</strong><p className="mt-1 text-[11px] text-white/35">V1.0 基线</p></div><ArrowRight className="text-white/25" /><div className="text-right"><strong className="text-4xl text-[#9ce2e8]">{lab.secondTestDone ? secondScore : '—'}</strong><p className="mt-1 text-[11px] text-white/35">V1.1 验证后</p></div></div><p className="mt-6 text-xs leading-5 text-white/55">已编辑并纳入 {lab.fixes.length} 项。只有重新运行受影响路径后，分数和最终结论才会更新。</p><button type="button" className="lab-primary-button mt-6 w-full justify-center" disabled={lab.fixes.length === 0} onClick={() => updateLab({ secondTestDone: true })}><RefreshCw size={15} />运行二次模拟试玩</button>{lab.secondTestDone && <div className="mt-4 rounded-lg bg-[#8fd8df]/8 p-3 text-xs leading-5 text-[#b5eef2]"><CheckCircle2 className="mr-2 inline" size={14} />已重跑 {lab.fixes.length + 3} 条受影响路径，结果已写入 V1.1。</div>}</Panel>
+          <Panel className="lab-revision-summary"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="lab-revision-score"><div><strong>{firstScore}</strong><p>V1.0 基线</p></div><ArrowRight /><div><strong>{lab.secondTestDone ? secondScore : '—'}</strong><p>V1.1 验证后</p></div></div><div className="lab-revision-progress"><span style={{ width: `${Math.min(100, lab.fixes.length / Math.max(1, activeSimulation.findings.length) * 100)}%` }} /></div><p className="lab-revision-summary-copy">已纳入 <strong>{lab.fixes.length}</strong> / {activeSimulation.findings.length} 项。只有重新运行受影响路线后，评分和最终结论才会更新。</p><button type="button" className="lab-primary-button w-full justify-center" disabled={lab.fixes.length === 0} onClick={() => updateLab({ secondTestDone: true })}><RefreshCw size={15} />运行二次模拟试玩</button>{lab.secondTestDone && <div className="lab-revision-complete"><CheckCircle2 size={14} />已重跑 {lab.fixes.length + 3} 条受影响路线，结果已写入 V1.1。</div>}</Panel>
         </div>
       </>
     )
@@ -691,7 +706,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       <>
         <StageHeading eyebrow="05 / SECOND PLAYTEST" title={readyForTabletop ? '二轮模拟通过，进入真人验证' : '二轮仍有阻断问题'} copy="对比编剧修改前后的行为变化、问题消除情况和新增风险。AI提供推进依据，但不替代编剧和导演的最终判断。" />
         <div className="lab-metric-grid">
-          {[[String(secondScore), 'V1.1 成熟度', `较基线 +${secondScore - 68}`], [`${Math.min(98, activeSimulation.coverage + 5)}%`, '证据覆盖率', '含首轮与二次模拟'], [String(remainingBlockers), '剩余 P0', remainingBlockers === 0 ? '已清除' : '阻断推进'], [String(lab.fixes.length), '编剧修改项', '已写入 V1.1']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+          {[[String(secondScore), 'V1.1 成熟度', `较基线 +${secondScore - firstScore}`], [`${Math.min(98, activeSimulation.coverage + 5)}%`, '证据覆盖率', '含首轮与二次模拟'], [String(remainingBlockers), '剩余 P0', remainingBlockers === 0 ? '已清除' : '阻断推进'], [String(lab.fixes.length), '编剧修改项', '已写入 V1.1']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[.78fr_1.22fr]">
           <Panel><div className="flex items-center gap-2"><Activity size={16} className="text-[#9ce2e8]" /><h2 className="text-sm font-semibold">结构质量与验证结果</h2></div><div className="mt-6 space-y-4">{scoreRows.map(([label, before, target]) => <ScoreBar label={String(label)} value={Number(before)} after={lab.secondTestDone ? dimensionAfter(String(label), Number(before), Number(target)) : undefined} key={String(label)} />)}</div><p className="mt-6 text-[11px] leading-5 text-white/40">每项结果由规则检查、模拟路径和编剧确认共同构成；点击式修改不会直接提高分数。</p></Panel>
