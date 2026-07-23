@@ -42,6 +42,25 @@ type Inputs = {
   duration: string
 }
 
+type AnalysisInsight = {
+  id: string
+  title: string
+  content: string
+  evidence: string
+  confidence: '高' | '中' | '待确认'
+}
+
+type AnalysisResult = {
+  summary: string
+  insights: AnalysisInsight[]
+  questions: string[]
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+}
+
 type SavedLab = {
   step: number
   maxVisited: number
@@ -54,6 +73,7 @@ type SavedLab = {
   fixes: string[]
   playtestStarted: boolean
   secondTestDone: boolean
+  analysis?: AnalysisResult
 }
 
 const defaultInputs: Inputs = {
@@ -115,13 +135,28 @@ const scoreRows = [
   ['拍摄安全', 70, 84],
 ]
 
-const insights = [
-  ['premise', '核心命题', '一场围绕“谁有权保管真相”展开的封闭空间悬疑。失踪的钥匙既是行动目标，也是档案归属权的象征。', '来源：故事详情第 1 段＋最终投票规则', '高'],
-  ['conflict', '主冲突结构', '公开目标是找回第七把钥匙；隐藏冲突是六人对档案真实性和调包者动机的不同判断。', '来源：故事目标＋角色规则', '高'],
-  ['world', '世界与规则边界', '旅馆在重启前夜处于封闭管理状态，玩家可以自由搜证，但结局必须通过证据组合与集体投票触发。', '来源：游戏规则；封闭范围需编剧确认', '中'],
-  ['characters', '人物关系动力', '六个角色需要同时具备公开身份、私人动机和不对称信息，避免所有人只围绕同一把钥匙行动。', '来源：人物数量＋个人任务规则', '中'],
-  ['timeline', '戏剧时间线', '故事需要在 90 分钟内完成进入、分散搜证、断电事件、路线重建、档案开启和集中判断六个阶段。', '来源：预计时长＋结局条件', '中'],
-  ['experience', '体验目标', '让玩家先形成不同解释，再通过空间行动和证据交换逐步收束，而不是依赖主持人一次性揭晓。', 'AI推断；需要编剧确认创作意图', '待确认'],
+const demoInsights: AnalysisInsight[] = [
+  { id: 'premise', title: '核心命题', content: '一场围绕“谁有权保管真相”展开的封闭空间悬疑。失踪的钥匙既是行动目标，也是档案归属权的象征。', evidence: '来源：故事详情第 1 段＋最终投票规则', confidence: '高' },
+  { id: 'conflict', title: '主冲突结构', content: '公开目标是找回第七把钥匙；隐藏冲突是六人对档案真实性和调包者动机的不同判断。', evidence: '来源：故事目标＋角色规则', confidence: '高' },
+  { id: 'world', title: '世界与规则边界', content: '旅馆在重启前夜处于封闭管理状态，玩家可以自由搜证，但结局必须通过证据组合与集体投票触发。', evidence: '来源：游戏规则；封闭范围需编剧确认', confidence: '中' },
+  { id: 'characters', title: '人物关系动力', content: '六个角色需要同时具备公开身份、私人动机和不对称信息，避免所有人只围绕同一把钥匙行动。', evidence: '来源：人物数量＋个人任务规则', confidence: '中' },
+  { id: 'timeline', title: '戏剧时间线', content: '故事需要在 90 分钟内完成进入、分散搜证、断电事件、路线重建、档案开启和集中判断六个阶段。', evidence: '来源：预计时长＋结局条件', confidence: '中' },
+  { id: 'experience', title: '体验目标', content: '让玩家先形成不同解释，再通过空间行动和证据交换逐步收束，而不是依赖主持人一次性揭晓。', evidence: 'AI推断；需要编剧确认创作意图', confidence: '待确认' },
+]
+
+const demoQuestions = [
+  '档案调包发生在断电之前还是之后？',
+  '调包者的行为是个人动机，还是受旅馆规则强制？',
+  '投票失败后是否允许重新搜证或进入另一结局？',
+]
+
+const analysisSteps = [
+  ['读取创作基线', '解析故事、规则、人物数量与时长'],
+  ['提取世界规则', '识别不能被改变的故事边界'],
+  ['建立人物动力', '检查目标、秘密与信息差'],
+  ['重建戏剧时间线', '分析阶段、转折与高潮位置'],
+  ['检查证据缺口', '生成需要编剧确认的问题'],
+  ['形成结构化分析', '写入故事理解与创作对齐页面'],
 ]
 
 const fixWeights: Record<string, number> = {
@@ -226,8 +261,19 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const [showApiKey, setShowApiKey] = useState(false)
   const [deepSeekModel, setDeepSeekModel] = useState('deepseek-v4-pro')
   const [connection, setConnection] = useState<{ state: 'idle' | 'testing' | 'connected' | 'error'; message: string }>({ state: 'idle', message: '尚未验证连接' })
+  const [analysisRun, setAnalysisRun] = useState<{ state: 'idle' | 'running' | 'error'; step: number; message: string }>({ state: 'idle', step: 0, message: '' })
 
   useEffect(() => localStorage.setItem(storageKey, JSON.stringify(lab)), [lab])
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/deepseek/status')
+      .then(response => response.json())
+      .then((result: { configured?: boolean }) => {
+        if (!cancelled && result.configured) setConnection({ state: 'connected', message: '密钥已安全保存，本设备 30 天内有效。' })
+      })
+      .catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
 
   const updateLab = (patch: Partial<SavedLab>) => setLab(current => ({ ...current, ...patch }))
   const updateInput = (key: keyof Inputs, value: string) => setLab(current => ({ ...current, inputs: { ...current.inputs, [key]: value } }))
@@ -236,6 +282,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const simulatedScore = Math.min(89, 68 + lab.fixes.reduce((total, id) => total + (fixWeights[id] || 0), 0))
   const secondScore = lab.secondTestDone ? simulatedScore : 68
   const readyForTabletop = lab.secondTestDone && lab.fixes.includes('rule') && lab.fixes.includes('route') && secondScore >= 79
+  const activeInsights = lab.analysis?.insights?.length ? lab.analysis.insights : demoInsights
+  const activeQuestions = lab.analysis?.questions?.length ? lab.analysis.questions : demoQuestions
 
   const aiPrompt = useMemo(() => `你是编剧部门的内容推理顾问。请根据以下资料输出：核心命题、世界规则、主冲突、人物关系与信息差、故事时间线、待确认问题、剧情节点、角色任务、证据链和异常恢复。所有推断必须注明依据和置信度，不替代编剧的最终判断。\n\n故事：${lab.inputs.story}\n规则：${lab.inputs.rules}\n人数：${lab.inputs.people}\n时长：${lab.inputs.duration}\n编剧补充：${lab.writerNote}`, [lab.inputs, lab.writerNote])
 
@@ -254,23 +302,80 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     window.setTimeout(() => setCopied(false), 1800)
   }
 
-  const testDeepSeekConnection = async () => {
+  const saveDeepSeekConnection = async () => {
     if (!apiKey.trim()) {
       setConnection({ state: 'error', message: '请先填写 DeepSeek API Key。' })
       return
     }
-    setConnection({ state: 'testing', message: '正在验证连接…' })
+    setConnection({ state: 'testing', message: '正在验证并安全保存…' })
     try {
-      const response = await fetch('/api/deepseek/test', {
+      const response = await fetch('/api/deepseek/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: apiKey.trim() }),
       })
       const result = await response.json() as { ok?: boolean; message?: string }
       if (!response.ok || !result.ok) throw new Error(result.message || '连接验证失败')
-      setConnection({ state: 'connected', message: `${deepSeekModel === 'deepseek-v4-pro' ? 'V4 Pro' : 'V4 Flash'} 连接验证成功` })
+      setApiKey('')
+      setShowApiKey(false)
+      setConnection({ state: 'connected', message: '密钥已安全保存，本设备 30 天内有效。' })
     } catch (error) {
       setConnection({ state: 'error', message: error instanceof Error ? error.message : '连接验证失败，请检查密钥。' })
+    }
+  }
+
+  const clearDeepSeekConnection = async () => {
+    await fetch('/api/deepseek/clear', { method: 'POST' }).catch(() => undefined)
+    setApiKey('')
+    setShowApiKey(false)
+    setConnection({ state: 'idle', message: '已清除保存的 DeepSeek 密钥。' })
+  }
+
+  const runDeepSeekAnalysis = async () => {
+    if (connection.state !== 'connected') {
+      setConnection(current => ({ ...current, message: '请先保存 DeepSeek 密钥，再启动真实分析。' }))
+      setSettingsOpen(true)
+      return
+    }
+    if (!lab.inputs.story.trim()) {
+      setAnalysisRun({ state: 'error', step: 0, message: '请先填写故事详情。' })
+      return
+    }
+
+    const startedAt = Date.now()
+    setAnalysisRun({ state: 'running', step: 0, message: '正在建立分析任务…' })
+    const progressTimer = window.setInterval(() => {
+      setAnalysisRun(current => current.state === 'running'
+        ? { ...current, step: Math.min(current.step + 1, analysisSteps.length - 2) }
+        : current)
+    }, 1100)
+
+    try {
+      const response = await fetch('/api/deepseek/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: deepSeekModel, inputs: lab.inputs, writerNote: lab.writerNote }),
+      })
+      const result = await response.json() as { ok?: boolean; message?: string; analysis?: AnalysisResult; usage?: AnalysisResult['usage'] }
+      if (!response.ok || !result.ok || !result.analysis) throw new Error(result.message || '分析没有完成，请重试。')
+
+      const remaining = Math.max(0, 2800 - (Date.now() - startedAt))
+      if (remaining) await new Promise(resolve => window.setTimeout(resolve, remaining))
+      window.clearInterval(progressTimer)
+      setAnalysisRun({ state: 'running', step: analysisSteps.length - 1, message: '分析完成，正在写入结果…' })
+      updateLab({
+        analysis: { ...result.analysis, usage: result.usage },
+        reviewedInsights: [],
+      })
+      window.setTimeout(() => {
+        setAnalysisRun({ state: 'idle', step: 0, message: '' })
+        go(1)
+      }, 650)
+    } catch (error) {
+      window.clearInterval(progressTimer)
+      const message = error instanceof Error ? error.message : '分析没有完成，请稍后重试。'
+      if (message.includes('密钥')) setConnection({ state: 'idle', message: '保存的密钥已失效，请重新设置。' })
+      setAnalysisRun({ state: 'error', step: 0, message })
     }
   }
 
@@ -304,7 +409,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       '',
       '仍需真人验证：23:17 谜题难度、隐藏角色平衡、听证时长、真实动线、机关手感与安全。',
       '',
-      '说明：本报告当前由网页演示规则生成；DeepSeek 仅提供连接验证，尚未自动分析本项目。',
+      `说明：故事理解${lab.analysis ? '来自 DeepSeek 本轮真实分析' : '当前使用演示样本'}；后续内容推演、模拟评分与决策结论仍为原型规则，需要编剧与真人验证。`,
     ].join('\n')
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
@@ -337,19 +442,28 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     if (lab.step === 1) return (
       <>
         <StageHeading eyebrow="02 / STORY ALIGNMENT" title="故事理解与创作对齐" copy="AI将故事拆成命题、冲突、世界规则、人物动力、时间线和体验目标。每条推断都显示依据与置信度，由编剧确认或修正。" />
+        <Panel className="lab-analysis-summary mb-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-2"><BrainCircuit size={16} /><span>{lab.analysis ? 'DEEPSEEK 真实分析' : '演示分析结构'}</span></div>
+              <p>{lab.analysis?.summary || '当前展示的是预置样本结构。保存 DeepSeek 密钥后，从第一步重新启动分析，即可生成与输入内容对应的真实结果。'}</p>
+            </div>
+            {lab.analysis?.usage && <div className="lab-analysis-usage"><strong>{lab.analysis.usage.total_tokens.toLocaleString()}</strong><span>本轮 Token</span></div>}
+          </div>
+        </Panel>
         <div className="grid gap-4 xl:grid-cols-2">
-          {insights.map(([id, title, copy, evidence, confidence]) => {
-            const reviewed = lab.reviewedInsights.includes(id)
-            return <Panel className="lab-insight-card" key={id}>
-              <div className="flex items-start justify-between gap-4"><div><span className="lab-tag">置信度 {confidence}</span><h2 className="mt-4 text-base font-semibold">{title}</h2></div><button type="button" className={`lab-review-button ${reviewed ? 'lab-review-button-active' : ''}`} onClick={() => toggleInsight(id)}>{reviewed ? <Check size={13} /> : <BrainCircuit size={13} />}{reviewed ? '编剧已确认' : '待编剧确认'}</button></div>
-              <p className="mt-3 text-sm leading-6 text-white/75">{copy}</p>
-              <p className="mt-4 border-t border-white/8 pt-3 text-[11px] leading-5 text-white/40">{evidence}</p>
+          {activeInsights.map(insight => {
+            const reviewed = lab.reviewedInsights.includes(insight.id)
+            return <Panel className="lab-insight-card" key={insight.id}>
+              <div className="flex items-start justify-between gap-4"><div><span className="lab-tag">置信度 {insight.confidence}</span><h2 className="mt-4 text-base font-semibold">{insight.title}</h2></div><button type="button" className={`lab-review-button ${reviewed ? 'lab-review-button-active' : ''}`} onClick={() => toggleInsight(insight.id)}>{reviewed ? <Check size={13} /> : <BrainCircuit size={13} />}{reviewed ? '编剧已确认' : '待编剧确认'}</button></div>
+              <p className="mt-3 text-sm leading-6 text-white/75">{insight.content}</p>
+              <p className="mt-4 border-t border-white/8 pt-3 text-[11px] leading-5 text-white/40">{insight.evidence}</p>
             </Panel>
           })}
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[.85fr_1.15fr]">
-          <Panel><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">待确认问题</h2></div><div className="mt-4 space-y-3">{['档案调包发生在断电之前还是之后？', '调包者的行为是个人动机，还是受旅馆规则强制？', '投票失败后是否允许重新搜证或进入另一结局？'].map((item, index) => <div className="lab-question-row" key={item}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></div>)}</div></Panel>
-          <Panel><label className="lab-field-label"><FileText size={15} />编剧修正与补充</label><textarea rows={6} placeholder="修正AI理解、补充创作意图，或明确不允许改变的设定。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value })} /><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/40">已确认 {lab.reviewedInsights.length} / {insights.length} 项</p><button type="button" className="lab-secondary-button" onClick={copyPrompt}><Clipboard size={15} />{copied ? '已复制' : '复制完整分析提示词'}</button></div></Panel>
+          <Panel><div className="flex items-center gap-2"><AlertTriangle size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">待确认问题</h2></div><div className="mt-4 space-y-3">{activeQuestions.map((item, index) => <div className="lab-question-row" key={`${index}-${item}`}><span>{String(index + 1).padStart(2, '0')}</span><p>{item}</p></div>)}</div></Panel>
+          <Panel><label className="lab-field-label"><FileText size={15} />编剧修正与补充</label><textarea rows={6} placeholder="修正AI理解、补充创作意图，或明确不允许改变的设定。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value })} /><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-white/40">已确认 {lab.reviewedInsights.length} / {activeInsights.length} 项</p><button type="button" className="lab-secondary-button" onClick={copyPrompt}><Clipboard size={15} />{copied ? '已复制' : '复制完整分析提示词'}</button></div></Panel>
         </div>
       </>
     )
@@ -435,7 +549,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       <>
         <StageHeading eyebrow="06 / DECISION BOARD" title={readyForTabletop ? '进入真人桌面验证' : lab.playtestStarted ? '完成关键修改后再推进' : '初步审查完成，验证覆盖不足'} copy="决策看板同时展示版本差异、结构质量、证据覆盖、剩余风险和真人验证任务。AI给出推进依据，但不替代编剧判断与执行安全责任。" />
         <div className="lab-metric-grid">
-          {[[String(secondScore), lab.secondTestDone ? 'V1.1 成熟度' : 'V1.0 成熟度', lab.secondTestDone ? `较基线 +${secondScore - 68}` : '尚未二次验证'], [lab.playtestStarted ? lab.secondTestDone ? '91%' : '78%' : '46%', '证据覆盖率', lab.playtestStarted ? '含模拟路径' : '仅结构审查'], [readyForTabletop ? '0' : lab.fixes.includes('rule') && lab.fixes.includes('route') ? '待复测' : '2', '剩余 P0', readyForTabletop ? '已清除' : '阻断推进'], [String(lab.reviewedInsights.length), '编剧确认项', `共 ${insights.length} 项`]].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+          {[[String(secondScore), lab.secondTestDone ? 'V1.1 成熟度' : 'V1.0 成熟度', lab.secondTestDone ? `较基线 +${secondScore - 68}` : '尚未二次验证'], [lab.playtestStarted ? lab.secondTestDone ? '91%' : '78%' : '46%', '证据覆盖率', lab.playtestStarted ? '含模拟路径' : '仅结构审查'], [readyForTabletop ? '0' : lab.fixes.includes('rule') && lab.fixes.includes('route') ? '待复测' : '2', '剩余 P0', readyForTabletop ? '已清除' : '阻断推进'], [String(lab.reviewedInsights.length), '编剧确认项', `共 ${activeInsights.length} 项`]].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
         </div>
         <div className="mt-4 grid gap-4 xl:grid-cols-[.78fr_1.22fr]">
           <Panel><div className="flex items-center gap-2"><Activity size={16} className="text-[#9ce2e8]" /><h2 className="text-sm font-semibold">结构质量与验证结果</h2></div><div className="mt-6 space-y-4">{scoreRows.map(([label, before, target]) => <ScoreBar label={String(label)} value={Number(before)} after={lab.secondTestDone ? dimensionAfter(String(label), Number(before), Number(target)) : undefined} key={String(label)} />)}</div><p className="mt-6 text-[11px] leading-5 text-white/40">每项结果由规则检查、模拟路径和编剧确认共同构成；点击式修改不会直接提高分数。</p></Panel>
@@ -453,7 +567,14 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   })()
 
   const showNext = lab.step < stages.length - 1
-  const nextLabels = ['分析故事', '进入内容推演', '生成空间与视觉', '进入模拟与迭代', '查看决策报告']
+  const nextLabels = [connection.state === 'connected' ? '启动 AI 分析' : '连接模型后分析', '进入内容推演', '生成空间与视觉', '进入模拟与迭代', '查看决策报告']
+  const handleNext = () => {
+    if (lab.step === 0) {
+      void runDeepSeekAnalysis()
+      return
+    }
+    next()
+  }
 
   return (
     <main className="lab-shell min-h-[100svh] text-white">
@@ -466,15 +587,15 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <nav className="mt-8 grid grid-cols-3 gap-1 sm:grid-cols-6 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
-        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />演示模式</span><br />API 已保留但未调用。页面使用预置样本和本地计算。</div>
+        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />混合验证模式</span><br />故事理解使用 DeepSeek 真实分析；后续推演、空间、模拟和评分仍为可交互原型。</div>
       </aside>
 
       <section className="lab-workspace">
-        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><div className="flex items-center gap-2"><span className={`lab-connection-badge ${connection.state === 'connected' ? 'lab-connection-badge-active' : ''}`}><span />{connection.state === 'connected' ? 'DeepSeek 已验证' : '模型未连接'}</span><button type="button" className="lab-model-button" onClick={() => setSettingsOpen(true)}><Settings2 size={13} />模型设置</button></div></header>
+        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><div className="flex items-center gap-2"><span className={`lab-connection-badge ${connection.state === 'connected' ? 'lab-connection-badge-active' : ''}`}><span />{connection.state === 'connected' ? 'DeepSeek 已保存' : '模型未连接'}</span><button type="button" className="lab-model-button" onClick={() => setSettingsOpen(true)}><Settings2 size={13} />模型设置</button></div></header>
         <div className="lab-content">{content}</div>
         <footer className="lab-footer">
           <button type="button" className="lab-secondary-button" disabled={lab.step === 0} onClick={() => go(Math.max(0, lab.step - 1))}><ArrowLeft size={15} />上一步</button>
-          {showNext && <button type="button" className="lab-primary-button" onClick={next}>{nextLabels[lab.step]}<ArrowRight size={15} /></button>}
+          {showNext && <button type="button" className="lab-primary-button" disabled={analysisRun.state === 'running'} onClick={handleNext}>{nextLabels[lab.step]}<ArrowRight size={15} /></button>}
         </footer>
       </section>
 
@@ -494,7 +615,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
 
             <label className="lab-settings-field">
               <span>模型</span>
-              <select value={deepSeekModel} onChange={event => { setDeepSeekModel(event.target.value); setConnection({ state: 'idle', message: '模型已更改，请重新验证。' }) }}>
+              <select value={deepSeekModel} onChange={event => setDeepSeekModel(event.target.value)}>
                 <option value="deepseek-v4-pro">DeepSeek V4 Pro｜深度推演</option>
                 <option value="deepseek-v4-flash">DeepSeek V4 Flash｜快速分析</option>
               </select>
@@ -506,8 +627,11 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
-                  onChange={event => { setApiKey(event.target.value); setConnection({ state: 'idle', message: '尚未验证连接' }) }}
-                  placeholder="输入 DeepSeek API Key"
+                  onChange={event => {
+                    setApiKey(event.target.value)
+                    if (connection.state !== 'connected') setConnection({ state: 'idle', message: '尚未保存连接' })
+                  }}
+                  placeholder={connection.state === 'connected' ? '已安全保存；如需更换请重新输入' : '输入 DeepSeek API Key'}
                   autoComplete="off"
                   spellCheck={false}
                 />
@@ -515,14 +639,51 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               </div>
             </label>
 
-            <div className="lab-security-note"><ShieldCheck size={16} /><p><strong>仅用于当前会话</strong><br />密钥不会写入网页源码或浏览器长期存储，刷新页面后自动清除。</p></div>
+            <div className="lab-security-note"><ShieldCheck size={16} /><p><strong>服务器加密保存 30 天</strong><br />密钥不会写入网页源码或可被脚本读取的浏览器存储，仅本设备持有安全凭证。</p></div>
 
             <div className={`lab-connection-result lab-connection-${connection.state}`}>
               <span className="lab-connection-dot" />
               <p>{connection.message}</p>
             </div>
 
-            <button type="button" className="lab-primary-button w-full justify-center" disabled={connection.state === 'testing'} onClick={testDeepSeekConnection}><PlugZap size={15} />{connection.state === 'testing' ? '正在验证…' : '测试 DeepSeek 连接'}</button>
+            <div className="lab-settings-actions">
+              <button type="button" className="lab-primary-button justify-center" disabled={connection.state === 'testing'} onClick={saveDeepSeekConnection}><PlugZap size={15} />{connection.state === 'testing' ? '正在保存…' : '验证并安全保存'}</button>
+              {connection.state === 'connected' && <button type="button" className="lab-secondary-button justify-center" onClick={clearDeepSeekConnection}>清除已保存配置</button>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {analysisRun.state !== 'idle' && (
+        <div className="lab-analysis-overlay" role="presentation">
+          <section className="lab-analysis-panel" role="dialog" aria-modal="true" aria-labelledby="analysis-progress-title">
+            {analysisRun.state === 'running' ? (
+              <>
+                <div className="lab-analysis-orbit" aria-hidden="true"><BrainCircuit size={24} /></div>
+                <p className="lab-settings-kicker">DEEPSEEK REASONING</p>
+                <h2 id="analysis-progress-title">正在理解创作基线</h2>
+                <p className="lab-analysis-message">{analysisRun.message || '只展示处理阶段，不展示模型内部思维内容。'}</p>
+                <div className="lab-analysis-steps">
+                  {analysisSteps.map(([title, copy], index) => (
+                    <div className={index < analysisRun.step ? 'is-complete' : index === analysisRun.step ? 'is-active' : ''} key={title}>
+                      <span>{index < analysisRun.step ? <Check size={13} /> : String(index + 1).padStart(2, '0')}</span>
+                      <p><strong>{title}</strong><small>{copy}</small></p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="lab-analysis-error">
+                <AlertTriangle size={28} />
+                <p className="lab-settings-kicker">ANALYSIS PAUSED</p>
+                <h2 id="analysis-progress-title">本轮分析没有完成</h2>
+                <p>{analysisRun.message}</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button type="button" className="lab-primary-button" onClick={() => void runDeepSeekAnalysis()}>重新分析</button>
+                  <button type="button" className="lab-secondary-button" onClick={() => setAnalysisRun({ state: 'idle', step: 0, message: '' })}>返回修改输入</button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}
