@@ -9,3 +9,4 @@ vite.config.d.ts
 build/*.js
 build/*.d.ts
 .DS_Store
+.env.local

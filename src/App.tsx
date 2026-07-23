@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronUp, Download, Eye, EyeOff, GripVertical, Pencil, RotateCcw } from 'lucide-react'
+import ReasoningLab from './ReasoningLab'
 
 const backgroundVideo = '/dna-background.mp4'
 const legacyLogo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8fc2d33f2b5a4bfb1fa4935fca355946f.svg'
@@ -183,9 +184,25 @@ export default function App() {
   const [videoReady, setVideoReady] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draggedCard, setDraggedCard] = useState<CardId | null>(null)
+  const [labOpen, setLabOpen] = useState(() => window.location.hash === '#reasoning-lab')
   const editorAvailable = new URLSearchParams(window.location.search).get('edit') === '1'
 
   useEffect(() => localStorage.setItem(storageKey, JSON.stringify(data)), [data])
+  useEffect(() => {
+    const syncRoute = () => setLabOpen(window.location.hash === '#reasoning-lab')
+    window.addEventListener('hashchange', syncRoute)
+    return () => window.removeEventListener('hashchange', syncRoute)
+  }, [])
+
+  const openReasoningLab = () => {
+    if (editing) return
+    window.location.hash = 'reasoning-lab'
+  }
+
+  const closeReasoningLab = () => {
+    history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    setLabOpen(false)
+  }
 
   const setCopy = (key: keyof Copy, value: string) => setData(current => ({ ...current, copy: { ...current.copy, [key]: value } }))
   const hidden = (id: CardId) => data.hidden.includes(id)
@@ -274,7 +291,7 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
+    if (id === 'activities') return <article role={!editing ? 'button' : undefined} tabIndex={!editing ? 0 : undefined} onClick={openReasoningLab} onKeyDown={event => { if (!editing && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openReasoningLab() } }} className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 ${!editing ? 'cursor-pointer' : ''}`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
@@ -316,6 +333,8 @@ export default function App() {
       </section>
     )
   }
+
+  if (labOpen) return <ReasoningLab onBack={closeReasoningLab} />
 
   return (
     <main className={`relative min-h-[100svh] overflow-x-hidden bg-[#0a0a0a] text-white ${editing ? 'is-editing' : ''}`}>
