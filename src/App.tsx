@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronUp, Download, Eye, EyeOff, GripVertical, Pencil, RotateCcw } from 'lucide-react'
 
-const backgroundVideo = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260622_044635_8daabe05-1a5c-491c-920f-4b0bd8f04812.mp4'
+const backgroundVideo = '/dna-background.mp4'
 const legacyLogo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8fc2d33f2b5a4bfb1fa4935fca355946f.svg'
 const defaultLogo = ''
 const defaultAvatar = 'https://polo-pecan-73837341.figma.site/_assets/v11/745de561b3ebfa8634a3483efc95f21feedd96c9.png'
@@ -274,13 +274,13 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-[14px] bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
+    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
       <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始内容推演" /></span>
     </article>
-    return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-[14px] bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
+    return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
@@ -319,7 +319,7 @@ export default function App() {
 
   return (
     <main className={`relative min-h-[100svh] overflow-x-hidden bg-[#0a0a0a] text-white ${editing ? 'is-editing' : ''}`}>
-      <video className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-[1500ms] ${videoReady ? 'opacity-100' : 'opacity-0'}`} src={backgroundVideo} autoPlay loop muted playsInline onCanPlay={() => setVideoReady(true)} />
+      <video className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-[1500ms] ${videoReady ? 'opacity-100' : 'opacity-0'}`} src={backgroundVideo} autoPlay loop muted playsInline preload="auto" onCanPlay={() => setVideoReady(true)} />
       <div className="scene-overlay absolute inset-0 z-[1]" />
 
       <AnimatedElement direction="down" delay={100} className="relative z-10">
@@ -356,7 +356,7 @@ export default function App() {
             <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="max-w-full rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-center text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
             {renderRegion('ageBottom', 'mt-6')}
           </section>
-          {renderRegion('side', 'w-full xl:w-[380px] xl:max-w-[34vw] xl:translate-y-6')}
+          {renderRegion('side', 'w-full xl:w-[350px] xl:max-w-[31vw] xl:translate-y-10')}
         </div>
         {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>
