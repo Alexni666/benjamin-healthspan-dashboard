@@ -159,6 +159,10 @@ const plans = [
   { id: 'A', title: '集中控制型', meta: '拍摄与执行优先', copy: '以大堂为中枢，六个功能区围绕核心动线展开。控场、跟拍和人员调度更稳定。' },
   { id: 'B', title: '探索强化型', meta: '沉浸与搜证优先', copy: '采用长廊与分层空间，增加隐藏区域和探索距离，换取更强的发现感。' },
 ]
+const compactPlayerCopy: Record<string, { behavior: string; result: string }> = {
+  速推型: { behavior: '快速搜索公开区域，优先拼齐主线。', result: '推进较快，但容易遗漏互动线索。' },
+  沉浸型: { behavior: '深度扮演角色，重视剧情互动。', result: '氛围良好，但线索共享速度较慢。' },
+}
 
 const demoV1: V1Draft = {
   title: '雾岭旅馆 · 第七把钥匙',
@@ -613,7 +617,10 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
           <div id="playtest-players" className="lab-result-anchor"><Panel>
               <div className="lab-section-title"><div><p>PLAYER PATHS</p><h2>玩家行为结果</h2></div><span>逐类可复查</span></div>
               <div className="lab-player-grid mt-5">
-                {activeSimulation.playerRuns.map(player => <div key={player.type}><div className="flex items-center justify-between gap-2"><strong>{player.type}</strong><span className={`lab-risk-pill ${player.status === '阻断' ? 'lab-risk-p0' : ''}`}>{player.status}</span></div><small>{player.behavior}</small><p>{player.result}</p></div>)}
+                {activeSimulation.playerRuns.map(player => {
+                  const copy = compactPlayerCopy[player.type] || player
+                  return <div key={player.type}><div className="flex items-center justify-between gap-2"><strong>{player.type}</strong><span className={`lab-risk-pill ${player.status === '阻断' ? 'lab-risk-p0' : ''}`}>{player.status}</span></div><small>{copy.behavior}</small><p>{copy.result}</p></div>
+                })}
               </div>
             </Panel></div>
         </div>
