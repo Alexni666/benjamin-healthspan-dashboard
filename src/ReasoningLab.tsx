@@ -13,11 +13,17 @@ import {
   LayoutDashboard,
   LockKeyhole,
   Map,
+  Eye,
+  EyeOff,
   Play,
+  PlugZap,
   RefreshCw,
+  Settings2,
+  ShieldCheck,
   Sparkles,
   Users,
   WandSparkles,
+  X,
 } from 'lucide-react'
 
 const storageKey = 'ai-reasoning-lab-demo:v1'
@@ -183,6 +189,11 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const [lab, setLab] = useState<SavedLab>(loadSaved)
   const [uploads, setUploads] = useState<Record<number, string>>({})
   const [copied, setCopied] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [apiKey, setApiKey] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [deepSeekModel, setDeepSeekModel] = useState('deepseek-v4-pro')
+  const [connection, setConnection] = useState<{ state: 'idle' | 'testing' | 'connected' | 'error'; message: string }>({ state: 'idle', message: '尚未验证连接' })
 
   useEffect(() => localStorage.setItem(storageKey, JSON.stringify(lab)), [lab])
 
@@ -199,6 +210,26 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     await navigator.clipboard.writeText(aiPrompt)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  const testDeepSeekConnection = async () => {
+    if (!apiKey.trim()) {
+      setConnection({ state: 'error', message: '请先填写 DeepSeek API Key。' })
+      return
+    }
+    setConnection({ state: 'testing', message: '正在验证连接…' })
+    try {
+      const response = await fetch('/api/deepseek/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKey.trim() }),
+      })
+      const result = await response.json() as { ok?: boolean; message?: string }
+      if (!response.ok || !result.ok) throw new Error(result.message || '连接验证失败')
+      setConnection({ state: 'connected', message: `${deepSeekModel === 'deepseek-v4-pro' ? 'V4 Pro' : 'V4 Flash'} 连接验证成功` })
+    } catch (error) {
+      setConnection({ state: 'error', message: error instanceof Error ? error.message : '连接验证失败，请检查密钥。' })
+    }
   }
 
   const loadVisual = (index: number, file?: File) => {
@@ -392,7 +423,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       <div className="lab-background-grid" aria-hidden="true" />
       <aside className="lab-sidebar">
         <button type="button" className="lab-back-button" onClick={onBack}><ArrowLeft size={16} />返回实验场</button>
-        <div className="mt-8"><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/50">AI REASONING LAB</p></div>
+        <div className="mt-8 flex items-start justify-between gap-3"><div><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/50">AI REASONING LAB</p></div><button type="button" className="lab-settings-icon" aria-label="打开模型设置" onClick={() => setSettingsOpen(true)}><Settings2 size={15} /></button></div>
         <nav className="mt-8 grid grid-cols-5 gap-1 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
@@ -400,13 +431,62 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       </aside>
 
       <section className="lab-workspace">
-        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><span className="inline-flex items-center gap-1.5 rounded-full border border-[#8fd8df]/30 bg-[#8fd8df]/10 px-3 py-1.5 text-[10px] text-[#b5eef2]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd8df]" />API 未调用</span></header>
+        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><div className="flex items-center gap-2"><span className={`lab-connection-badge ${connection.state === 'connected' ? 'lab-connection-badge-active' : ''}`}><span />{connection.state === 'connected' ? 'DeepSeek 已验证' : '模型未连接'}</span><button type="button" className="lab-model-button" onClick={() => setSettingsOpen(true)}><Settings2 size={13} />模型设置</button></div></header>
         <div className="lab-content">{content}</div>
         <footer className="lab-footer">
           <button type="button" className="lab-secondary-button" disabled={lab.step === 0} onClick={() => go(Math.max(0, lab.step - 1))}><ArrowLeft size={15} />上一步</button>
           {showNext && <button type="button" className="lab-primary-button" disabled={!canContinue || (lab.step === 8 && !lab.secondTestDone)} onClick={next}>{lab.step === 0 ? '生成内容骨架' : lab.step === 5 ? '开始模拟试玩' : lab.step === 8 ? '查看最终结论' : '确认并继续'}<ArrowRight size={15} /></button>}
         </footer>
       </section>
+
+      {settingsOpen && (
+        <div className="lab-settings-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSettingsOpen(false) }}>
+          <section className="lab-settings-panel" role="dialog" aria-modal="true" aria-labelledby="model-settings-title">
+            <div className="lab-settings-header">
+              <div><p className="lab-settings-kicker">REASONING ENGINE</p><h2 id="model-settings-title">模型设置</h2><p>优先接入 DeepSeek，用于后续故事理解与内容推演。</p></div>
+              <button type="button" aria-label="关闭模型设置" onClick={() => setSettingsOpen(false)}><X size={18} /></button>
+            </div>
+
+            <div className="lab-provider-card">
+              <div className="lab-provider-mark">DS</div>
+              <div><strong>DeepSeek</strong><span>首选推理服务 · OpenAI 兼容接口</span></div>
+              <span className="lab-provider-status">优先</span>
+            </div>
+
+            <label className="lab-settings-field">
+              <span>模型</span>
+              <select value={deepSeekModel} onChange={event => { setDeepSeekModel(event.target.value); setConnection({ state: 'idle', message: '模型已更改，请重新验证。' }) }}>
+                <option value="deepseek-v4-pro">DeepSeek V4 Pro｜深度推演</option>
+                <option value="deepseek-v4-flash">DeepSeek V4 Flash｜快速分析</option>
+              </select>
+            </label>
+
+            <label className="lab-settings-field">
+              <span>API Key</span>
+              <div className="lab-secret-input">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={event => { setApiKey(event.target.value); setConnection({ state: 'idle', message: '尚未验证连接' }) }}
+                  placeholder="输入 DeepSeek API Key"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button type="button" aria-label={showApiKey ? '隐藏密钥' : '显示密钥'} onClick={() => setShowApiKey(value => !value)}>{showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+              </div>
+            </label>
+
+            <div className="lab-security-note"><ShieldCheck size={16} /><p><strong>仅用于当前会话</strong><br />密钥不会写入网页源码或浏览器长期存储，刷新页面后自动清除。</p></div>
+
+            <div className={`lab-connection-result lab-connection-${connection.state}`}>
+              <span className="lab-connection-dot" />
+              <p>{connection.message}</p>
+            </div>
+
+            <button type="button" className="lab-primary-button w-full justify-center" disabled={connection.state === 'testing'} onClick={testDeepSeekConnection}><PlugZap size={15} />{connection.state === 'testing' ? '正在验证…' : '测试 DeepSeek 连接'}</button>
+          </section>
+        </div>
+      )}
     </main>
   )
 }
