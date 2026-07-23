@@ -506,39 +506,27 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const content = (() => {
     if (lab.step === 0) return (
       <>
-        <StageHeading eyebrow="01 / CREATIVE INPUT" title="导入创作版本" copy="输入现有故事、规则、时长和角色资料。AI先完成首轮模拟，不会改写或覆盖编剧原稿。" singleLine />
+        <StageHeading eyebrow="01 / CREATIVE INPUT" title="导入创作版本" copy="填写故事、规则、时长和角色信息，点击开始试玩即可进入 AI 分析。" singleLine />
 
-        <section className="lab-input-section">
-          <div className="lab-section-heading"><span>01</span><div><h2>故事与体验规则</h2><p>故事梗概和完整文档都可以直接粘贴，系统会自动识别信息密度。</p></div></div>
-          <div className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
-            <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={9} placeholder="粘贴故事梗概、完整故事文档或案件资料。" /></Panel>
-            <div className="grid gap-4">
-              <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="自由行动、信息交换、胜负条件、结局触发方式……" /></Panel>
-              <Panel><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} placeholder="例如：90分钟" /><p className="lab-field-help">用于推演剧情阶段、线索释放和高潮发生时间。</p></Panel>
-            </div>
-          </div>
-        </section>
+        <div className="lab-input-top-grid">
+          <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} placeholder="故事梗概或完整故事文档。" /></Panel>
+          <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="行动方式、信息交换和结局条件。" /></Panel>
+          <Panel className="lab-duration-panel"><label className="lab-field-label"><Clock3 size={15} />预计时长</label><input value={lab.inputs.duration} onChange={event => updateInput('duration', event.target.value)} placeholder="90分钟" /></Panel>
+        </div>
 
-        <section className="lab-input-section mt-7">
-          <div className="lab-section-heading lab-role-heading">
-            <span>02</span>
-            <div><h2>角色设定</h2><p>只填人数也可以开始；已有角色资料时，补充基本身份、目标和已知信息。</p></div>
-            <label className="lab-people-count"><Users size={14} /><span>人数</span><input type="number" min="1" max="20" value={lab.inputs.people} onChange={event => updatePeople(event.target.value)} /></label>
-          </div>
-          <div className="lab-character-grid">
+        <Panel className="lab-role-strip mt-4">
+          <div className="lab-role-strip-title"><Users size={15} /><div><strong>角色设定</strong><span>人数与基本情况</span></div></div>
+          <label className="lab-role-count"><span>人数</span><input type="number" min="1" max="20" value={lab.inputs.people} onChange={event => updatePeople(event.target.value)} /></label>
+          <div className="lab-role-track">
             {lab.inputs.characters.map((character, index) => (
-              <Panel className="lab-character-card" key={index}>
-                <div className="lab-character-index">{String(index + 1).padStart(2, '0')}</div>
-                <div>
-                  <label>角色名称</label>
-                  <input value={character.name} onChange={event => updateCharacter(index, 'name', event.target.value)} placeholder={`角色 ${index + 1}`} />
-                  <label>基本情况</label>
-                  <textarea rows={3} value={character.profile} onChange={event => updateCharacter(index, 'profile', event.target.value)} placeholder="身份、目标、秘密、权限或已经掌握的信息。" />
-                </div>
-              </Panel>
+              <div className="lab-role-item" key={index}>
+                <span>角色 {index + 1}</span>
+                <input value={character.name} onChange={event => updateCharacter(index, 'name', event.target.value)} placeholder="名称" />
+                <textarea rows={2} value={character.profile} onChange={event => updateCharacter(index, 'profile', event.target.value)} placeholder="基本情况" />
+              </div>
             ))}
           </div>
-        </section>
+        </Panel>
       </>
     )
 
