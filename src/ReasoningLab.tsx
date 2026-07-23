@@ -10,6 +10,7 @@ import {
   Clock3,
   Download,
   FileText,
+  FileUp,
   ImagePlus,
   Layers3,
   LockKeyhole,
@@ -21,7 +22,6 @@ import {
   Settings2,
   ShieldCheck,
   Users,
-  WandSparkles,
   X,
 } from 'lucide-react'
 
@@ -318,6 +318,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [deepSeekModel, setDeepSeekModel] = useState('deepseek-v4-pro')
+  const [storyFileName, setStoryFileName] = useState('')
+  const [storyFileLoading, setStoryFileLoading] = useState(false)
   const [connection, setConnection] = useState<{ state: 'idle' | 'testing' | 'connected' | 'error'; message: string }>({ state: 'idle', message: '尚未验证连接' })
   const [analysisRun, setAnalysisRun] = useState<{ state: 'idle' | 'running' | 'error'; step: number; message: string }>({ state: 'idle', step: 0, message: '' })
 
@@ -350,6 +352,27 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       characters: current.inputs.characters.map((character, characterIndex) => characterIndex === index ? { ...character, [key]: value } : character),
     },
   }))
+  const importStoryFile = async (file?: File) => {
+    if (!file) return
+    if (file.size > 10 * 1024 * 1024) {
+      window.alert('请选择小于 10MB 的文档。')
+      return
+    }
+    setStoryFileLoading(true)
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase()
+      const text = extension === 'docx'
+        ? (await (await import('mammoth')).extractRawText({ arrayBuffer: await file.arrayBuffer() })).value
+        : await file.text()
+      if (!text.trim()) throw new Error('文档中没有识别到可用文字。')
+      updateInput('story', text.trim())
+      setStoryFileName(file.name)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '文档读取失败，请换一个文件重试。')
+    } finally {
+      setStoryFileLoading(false)
+    }
+  }
   const go = (nextStep: number) => setLab(current => ({ ...current, step: nextStep, maxVisited: Math.max(current.maxVisited, nextStep) }))
   const next = () => go(Math.min(lab.step + 1, stages.length - 1))
   const activeInsights = lab.analysis?.insights?.length ? lab.analysis.insights : demoInsights
@@ -518,7 +541,14 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <StageHeading eyebrow="01 / CREATIVE INPUT" title="导入创作版本" copy="填写故事、规则、时长和角色信息，点击开始试玩即可进入 AI 分析。" singleLine />
 
         <div className="lab-input-top-grid">
-          <Panel><label className="lab-field-label"><FileText size={15} />故事详情</label><textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} placeholder="故事梗概或完整故事文档。" /></Panel>
+          <Panel>
+            <div className="lab-field-header">
+              <label className="lab-field-label"><FileText size={15} />故事详情</label>
+              <label className="lab-file-button"><FileUp size={14} />{storyFileLoading ? '正在读取' : '上传文档'}<input type="file" accept=".txt,.md,.docx,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden disabled={storyFileLoading} onChange={event => { void importStoryFile(event.target.files?.[0]); event.target.value = '' }} /></label>
+            </div>
+            <textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} placeholder="故事梗概或完整故事文档。" />
+            {storyFileName && <p className="lab-file-status">已导入：{storyFileName}</p>}
+          </Panel>
           <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="行动方式、信息交换和结局条件。" /></Panel>
         </div>
 
@@ -749,7 +779,6 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         <nav className="mt-8 grid grid-cols-3 gap-1 sm:grid-cols-5 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
-        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />AI 模拟实验</span><br />DeepSeek 生成首轮行为结果和诊断依据；平面图与二轮评分目前仍为交互原型。</div>
       </aside>
 
       <section className="lab-workspace">
