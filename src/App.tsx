@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronDown, ChevronUp, Download, Eye, EyeOff, GripVertical, HelpCircle, Pencil, RotateCcw } from 'lucide-react'
 
 const backgroundVideo = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260622_044635_8daabe05-1a5c-491c-920f-4b0bd8f04812.mp4'
-const logo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8fc2d33f2b5a4bfb1fa4935fca355946f.svg'
+const defaultLogo = 'https://polo-pecan-73837341.figma.site/_assets/v11/f73360d8fc2d33f2b5a4bfb1fa4935fca355946f.svg'
 const defaultAvatar = 'https://polo-pecan-73837341.figma.site/_assets/v11/745de561b3ebfa8634a3483efc95f21feedd96c9.png'
 const ageTexture = 'https://polo-pecan-73837341.figma.site/_assets/v11/d8d9bd498347ea96ca4d675a624c8d90e06786e7.png'
 const insightsImage = 'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png'
@@ -11,6 +11,9 @@ const storageKey = 'healthspan-simple-editor:v1'
 
 type Direction = 'up' | 'down' | 'left' | 'right' | 'scale'
 type CardId = 'activities' | 'insights' | 'snapshot' | 'plan'
+type RegionId = 'side' | 'ageBottom' | 'pageBottom'
+type CardWidth = 'half' | 'full'
+type CardPlacement = { region: RegionId; width: CardWidth }
 
 type Copy = {
   name: string
@@ -30,9 +33,11 @@ type Copy = {
 
 type EditorData = {
   copy: Copy
+  logo: string
   avatar: string
   order: CardId[]
   hidden: CardId[]
+  layout: Record<CardId, CardPlacement>
 }
 
 const defaultCopy: Copy = {
@@ -52,24 +57,38 @@ const defaultCopy: Copy = {
 }
 
 const defaultOrder: CardId[] = ['activities', 'insights', 'snapshot', 'plan']
+const defaultLayout: Record<CardId, CardPlacement> = {
+  activities: { region: 'side', width: 'half' },
+  insights: { region: 'side', width: 'half' },
+  snapshot: { region: 'side', width: 'half' },
+  plan: { region: 'side', width: 'half' },
+}
 const cardLabels: Record<CardId, string> = {
   activities: 'Upcoming Activities',
   insights: 'Your Insights',
   snapshot: 'Your Health Snapshot',
   plan: 'Action Plan',
 }
+const regionLabels: Record<RegionId, string> = {
+  side: '右侧',
+  ageBottom: '年龄卡下方',
+  pageBottom: '页面底部',
+}
 
 function loadEditorData(): EditorData {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || '{}') as Partial<EditorData>
+    const storedLayout = stored.layout || {} as Partial<Record<CardId, CardPlacement>>
     return {
       copy: { ...defaultCopy, ...(stored.copy || {}) },
+      logo: stored.logo || defaultLogo,
       avatar: stored.avatar || defaultAvatar,
       order: stored.order?.length === defaultOrder.length ? stored.order : defaultOrder,
       hidden: stored.hidden || [],
+      layout: Object.fromEntries(defaultOrder.map(id => [id, { ...defaultLayout[id], ...(storedLayout[id] || {}) }])) as Record<CardId, CardPlacement>,
     }
   } catch {
-    return { copy: defaultCopy, avatar: defaultAvatar, order: defaultOrder, hidden: [] }
+    return { copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout }
   }
 }
 
@@ -161,6 +180,7 @@ function RulerTicker() {
 
 export default function App() {
   const age = useBiologicalAge()
+  const logoInput = useRef<HTMLInputElement>(null)
   const avatarInput = useRef<HTMLInputElement>(null)
   const [data, setData] = useState<EditorData>(loadEditorData)
   const [videoReady, setVideoReady] = useState(false)
@@ -178,12 +198,14 @@ export default function App() {
 
   const toggleCard = (id: CardId) => setData(current => ({ ...current, hidden: current.hidden.includes(id) ? current.hidden.filter(item => item !== id) : [...current.hidden, id] }))
   const moveCard = (id: CardId, offset: number) => setData(current => {
-    const from = current.order.indexOf(id)
-    const to = Math.max(0, Math.min(current.order.length - 1, from + offset))
-    if (from === to) return current
+    const siblings = current.order.filter(item => current.layout[item].region === current.layout[id].region)
+    const target = siblings[siblings.indexOf(id) + offset]
+    if (!target) return current
     const order = [...current.order]
+    const from = order.indexOf(id)
     order.splice(from, 1)
-    order.splice(to, 0, id)
+    const targetIndex = order.indexOf(target)
+    order.splice(offset > 0 ? targetIndex + 1 : targetIndex, 0, id)
     return { ...current, order }
   })
   const dropCard = (target: CardId) => {
@@ -191,24 +213,50 @@ export default function App() {
     setData(current => {
       const order = current.order.filter(id => id !== draggedCard)
       order.splice(order.indexOf(target), 0, draggedCard)
-      return { ...current, order }
+      return {
+        ...current,
+        order,
+        layout: { ...current.layout, [draggedCard]: { ...current.layout[draggedCard], region: current.layout[target].region } },
+      }
     })
     setDraggedCard(null)
   }
+  const dropInRegion = (region: RegionId) => {
+    if (!draggedCard) return
+    setData(current => {
+      const order = current.order.filter(id => id !== draggedCard)
+      const lastCard = order.filter(id => current.layout[id].region === region).at(-1)
+      order.splice(lastCard ? order.indexOf(lastCard) + 1 : order.length, 0, draggedCard)
+      return {
+        ...current,
+        order,
+        layout: { ...current.layout, [draggedCard]: { ...current.layout[draggedCard], region } },
+      }
+    })
+    setDraggedCard(null)
+  }
+  const setRegion = (id: CardId, region: RegionId) => setData(current => ({
+    ...current,
+    layout: { ...current.layout, [id]: { ...current.layout[id], region } },
+  }))
+  const setCardWidth = (id: CardId, width: CardWidth) => setData(current => ({
+    ...current,
+    layout: { ...current.layout, [id]: { ...current.layout[id], width } },
+  }))
 
-  const loadAvatar = (file?: File) => {
+  const loadImage = (file: File | undefined, target: 'logo' | 'avatar') => {
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      window.alert('请选择小于 2MB 的头像图片。')
+    if (file.size > 1024 * 1024) {
+      window.alert(`请选择小于 1MB 的${target === 'logo' ? '品牌 Logo' : '头像'}图片。`)
       return
     }
     const reader = new FileReader()
-    reader.onload = () => setData(current => ({ ...current, avatar: String(reader.result) }))
+    reader.onload = () => setData(current => ({ ...current, [target]: String(reader.result) }))
     reader.readAsDataURL(file)
   }
 
   const exportEdits = () => {
-    const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ version: 2, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -220,7 +268,7 @@ export default function App() {
   const resetEdits = () => {
     if (!window.confirm('确定清除当前浏览器里的全部修改吗？')) return
     localStorage.removeItem(storageKey)
-    setData({ copy: defaultCopy, avatar: defaultAvatar, order: defaultOrder, hidden: [] })
+    setData({ copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout })
   }
 
   const cardControls = (id: CardId) => editing && (
@@ -252,14 +300,47 @@ export default function App() {
     </article>
   }
 
+  const renderRegion = (region: RegionId, className = '') => {
+    const cards = data.order.filter(id => data.layout[id].region === region && (editing || !hidden(id)))
+    if (!editing && cards.length === 0) return null
+    return (
+      <section
+        className={`layout-region ${editing ? 'layout-region-editing' : ''} ${className}`}
+        aria-label={`${regionLabels[region]}模块`}
+        onDragOver={event => { if (editing) event.preventDefault() }}
+        onDrop={() => dropInRegion(region)}
+      >
+        {editing && <span className="region-label">{regionLabels[region]}</span>}
+        {cards.map((id, index) => (
+          <AnimatedElement direction="left" delay={500 + index * 120} className={`${data.layout[id].width === 'full' ? 'sm:col-span-2' : ''} ${id === 'snapshot' ? 'relative z-20' : ''}`} key={id}>
+            <div
+              draggable={editing}
+              onDragStart={() => setDraggedCard(id)}
+              onDragEnd={() => setDraggedCard(null)}
+              onDragOver={event => { if (editing) event.preventDefault() }}
+              onDrop={event => { event.stopPropagation(); dropCard(id) }}
+            >
+              {renderCard(id)}
+            </div>
+          </AnimatedElement>
+        ))}
+        {editing && cards.length === 0 && <span className="region-empty">把模块拖到这里</span>}
+      </section>
+    )
+  }
+
   return (
-    <main className={`relative min-h-[100svh] overflow-hidden bg-[#0a0a0a] text-white ${editing ? 'is-editing' : ''}`}>
+    <main className={`relative min-h-[100svh] overflow-x-hidden bg-[#0a0a0a] text-white ${editing ? 'is-editing' : ''}`}>
       <video className={`absolute inset-0 z-0 h-full w-full object-cover transition-opacity duration-[1500ms] ${videoReady ? 'opacity-100' : 'opacity-0'}`} src={backgroundVideo} autoPlay loop muted playsInline onCanPlay={() => setVideoReady(true)} />
       <div className="scene-overlay absolute inset-0 z-[1]" />
 
       <AnimatedElement direction="down" delay={100} className="relative z-10">
         <nav className="flex items-start justify-between px-5 pt-6 sm:px-8 sm:pt-8 lg:px-12">
-          <img src={logo} alt="Healthspan" className="h-10 w-40 object-contain object-left" />
+          <button type="button" className="logo-editor relative h-10 w-40" disabled={!editing} onClick={() => logoInput.current?.click()} aria-label="更换品牌 Logo">
+            <img src={data.logo} alt="Healthspan" className="h-full w-full object-contain object-left" />
+            {editing && <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/55"><Pencil size={17} /></span>}
+          </button>
+          <input ref={logoInput} type="file" accept="image/*" hidden onChange={event => { loadImage(event.target.files?.[0], 'logo'); event.target.value = '' }} />
           <div className="absolute left-1/2 top-8 -translate-x-1/2 sm:top-10">
             <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/20 text-white backdrop-blur-xl transition-colors hover:bg-black/40" aria-label="Show dashboard help" aria-expanded={helpOpen} onClick={() => setHelpOpen(open => !open)}><HelpCircle size={18} strokeWidth={1.5} /></button>
             <div className={`absolute left-1/2 top-12 w-52 -translate-x-1/2 rounded-2xl border border-white/10 bg-black/70 p-3 text-center text-xs leading-relaxed text-white/70 backdrop-blur-2xl transition-all ${helpOpen || editing ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-2 opacity-0'}`}><EditableText value={data.copy.help} editing={editing} onChange={value => setCopy('help', value)} multiline /></div>
@@ -270,30 +351,41 @@ export default function App() {
               <img src={data.avatar} alt={data.copy.name} className="h-11 w-11 rounded-full border border-white/20 object-cover sm:h-16 sm:w-16 lg:h-[72px] lg:w-[72px]" />
               {editing && <span className="absolute inset-0 grid place-items-center rounded-full bg-black/55"><Pencil size={17} /></span>}
             </button>
-            <input ref={avatarInput} type="file" accept="image/*" hidden onChange={event => { loadAvatar(event.target.files?.[0]); event.target.value = '' }} />
+            <input ref={avatarInput} type="file" accept="image/*" hidden onChange={event => { loadImage(event.target.files?.[0], 'avatar'); event.target.value = '' }} />
           </div>
         </nav>
       </AnimatedElement>
 
-      <div className="relative z-[5] flex flex-col gap-10 px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:absolute xl:inset-x-0 xl:bottom-0 xl:flex-row xl:items-end xl:justify-between xl:pt-28">
-        <section className="w-full sm:w-[520px] lg:w-[620px]" aria-labelledby="age-title">
-          <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px]">
-            <div className="animate-spin-bg absolute inset-[-5%] bg-cover bg-center" style={{ backgroundImage: `url(${ageTexture})` }} /><div className="age-glow absolute inset-0" />
-            <div className="relative z-10 flex flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]">{age}</strong></AnimatedElement></div>
-          </div></AnimatedElement>
-          <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
-        </section>
-
-        <section className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 xl:w-[540px]" aria-label="Health dashboard shortcuts">
-          {data.order.map((id, index) => (editing || !hidden(id)) && <AnimatedElement direction="left" delay={500 + index * 150} className={id === 'snapshot' ? 'relative z-20' : ''} key={id}><div draggable={editing} onDragStart={() => setDraggedCard(id)} onDragOver={event => { if (editing) event.preventDefault() }} onDrop={() => dropCard(id)}>{renderCard(id)}</div></AnimatedElement>)}
-        </section>
+      <div className="relative z-[5] px-5 pb-6 pt-14 sm:px-8 sm:pb-8 sm:pt-20 lg:px-12 lg:pb-12 xl:pt-12">
+        <div className="flex flex-col gap-10 xl:min-h-[calc(100svh-126px)] xl:flex-row xl:items-end xl:justify-between">
+          <section className="w-full sm:w-[520px] lg:w-[620px]" aria-labelledby="age-title">
+            <AnimatedElement direction="right" delay={300}><div className="relative flex h-[420px] w-full items-center justify-center overflow-hidden rounded-[24px] sm:h-[500px] sm:rounded-[32px] lg:h-[550px] lg:rounded-[40px]">
+              <div className="animate-spin-bg absolute inset-[-5%] bg-cover bg-center" style={{ backgroundImage: `url(${ageTexture})` }} /><div className="age-glow absolute inset-0" />
+              <div className="relative z-10 flex flex-col items-center text-center"><AnimatedElement direction="up" delay={600}><p id="age-title" className="text-base font-medium leading-snug text-gray-200 sm:text-lg md:text-[22px]"><EditableText value={data.copy.ageLabel} editing={editing} onChange={value => setCopy('ageLabel', value)} multiline /></p></AnimatedElement><AnimatedElement direction="scale" delay={800}><strong className="mt-5 block font-sans text-[72px] font-semibold leading-[.85] tracking-[-.07em] tabular-nums sm:text-[100px] lg:text-[132px]">{age}</strong></AnimatedElement></div>
+            </div></AnimatedElement>
+            <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
+            {renderRegion('ageBottom', 'mt-6')}
+          </section>
+          {renderRegion('side', 'w-full xl:w-[540px]')}
+        </div>
+        {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>
 
       {editorAvailable && <aside className={`editor-panel ${editing ? 'editor-panel-open' : ''}`}>
         <button type="button" className="editor-main-button" onClick={() => setEditing(value => !value)}>{editing ? <Check size={17} /> : <Pencil size={17} />}{editing ? '完成编辑' : '编辑网页'}</button>
         {editing && <div className="editor-options">
-          <div><strong>模块顺序与显示</strong><small>拖拽卡片，或使用下面的按钮</small></div>
-          <div className="editor-module-list">{data.order.map((id, index) => <div className="editor-module-row" key={id}><span>{cardLabels[id]}</span><span><button type="button" disabled={index === 0} aria-label={`上移 ${cardLabels[id]}`} onClick={() => moveCard(id, -1)}><ChevronUp size={14} /></button><button type="button" disabled={index === data.order.length - 1} aria-label={`下移 ${cardLabels[id]}`} onClick={() => moveCard(id, 1)}><ChevronDown size={14} /></button><button type="button" aria-label={hidden(id) ? `显示 ${cardLabels[id]}` : `隐藏 ${cardLabels[id]}`} onClick={() => toggleCard(id)}>{hidden(id) ? <Eye size={14} /> : <EyeOff size={14} />}</button></span></div>)}</div>
+          <div><strong>模块位置、宽度与显示</strong><small>拖拽到虚线区域，或使用下面的选项</small></div>
+          <div className="editor-module-list">{data.order.map(id => {
+            const siblings = data.order.filter(item => data.layout[item].region === data.layout[id].region)
+            const index = siblings.indexOf(id)
+            return <div className="editor-module-row" key={id}>
+              <div className="editor-module-heading"><span>{cardLabels[id]}</span><span className="editor-module-buttons"><button type="button" disabled={index === 0} aria-label={`上移 ${cardLabels[id]}`} onClick={() => moveCard(id, -1)}><ChevronUp size={14} /></button><button type="button" disabled={index === siblings.length - 1} aria-label={`下移 ${cardLabels[id]}`} onClick={() => moveCard(id, 1)}><ChevronDown size={14} /></button><button type="button" aria-label={hidden(id) ? `显示 ${cardLabels[id]}` : `隐藏 ${cardLabels[id]}`} onClick={() => toggleCard(id)}>{hidden(id) ? <Eye size={14} /> : <EyeOff size={14} />}</button></span></div>
+              <div className="editor-module-settings">
+                <select value={data.layout[id].region} aria-label={`${cardLabels[id]}的位置`} onChange={event => setRegion(id, event.target.value as RegionId)}>{Object.entries(regionLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select>
+                <button type="button" onClick={() => setCardWidth(id, data.layout[id].width === 'half' ? 'full' : 'half')}>{data.layout[id].width === 'half' ? '半宽' : '整行'}</button>
+              </div>
+            </div>
+          })}</div>
           <div className="editor-actions"><button type="button" onClick={exportEdits}><Download size={15} />导出修改</button><button type="button" onClick={resetEdits}><RotateCcw size={15} />重置</button></div>
           <p>修改会自动保存在当前浏览器，不会直接影响别人看到的线上页面。</p>
         </div>}

@@ -48,32 +48,44 @@ button { border: 0; color: inherit; font: inherit; cursor: pointer; }
 .editable-text { min-width: .5em; }
 .is-editing .editable-text { border-radius: .25rem; outline: 1px dashed rgba(239, 206, 150, .9); outline-offset: .18rem; cursor: text; }
 .is-editing .editable-text:focus { outline: 2px solid #efce96; background: rgba(239, 206, 150, .12); }
-.avatar-editor:disabled { cursor: default; }
-.avatar-editor:not(:disabled) { outline: 1px dashed rgba(239, 206, 150, .9); outline-offset: .25rem; }
+.avatar-editor:disabled, .logo-editor:disabled { cursor: default; }
+.avatar-editor:not(:disabled), .logo-editor:not(:disabled) { outline: 1px dashed rgba(239, 206, 150, .9); outline-offset: .25rem; }
 .editor-card { transition: opacity .2s ease, filter .2s ease; }
 .is-editing .editor-card { outline: 1px dashed rgba(239, 206, 150, .62); outline-offset: .25rem; cursor: grab; }
 .is-editing .editor-card:active { cursor: grabbing; }
 .editor-card-hidden { opacity: .38; filter: grayscale(.8); }
 .card-edit-controls { position: absolute; z-index: 30; top: .55rem; right: .55rem; display: flex; align-items: center; gap: .3rem; border: 1px solid rgba(255,255,255,.15); border-radius: 999px; padding: .28rem .36rem; color: white; background: rgba(0,0,0,.62); box-shadow: 0 8px 24px rgba(0,0,0,.24); backdrop-filter: blur(14px); }
 .card-edit-controls button { display: grid; place-items: center; padding: .15rem; background: transparent; }
+.layout-region { position: relative; display: grid; width: 100%; grid-template-columns: 1fr; gap: 1rem; }
+.layout-region-editing { min-height: 5rem; border: 1px dashed rgba(239, 206, 150, .62); border-radius: 1.25rem; padding: 1.5rem .75rem .75rem; }
+.region-label { position: absolute; z-index: 40; top: -.65rem; left: 1rem; border: 1px solid rgba(239, 206, 150, .55); border-radius: 999px; padding: .25rem .55rem; color: #f7ddb1; background: rgba(12,12,12,.88); font-size: .62rem; font-weight: 700; }
+.region-empty { grid-column: 1 / -1; align-self: center; justify-self: center; color: rgba(255,255,255,.45); font-size: .68rem; }
 
-.editor-panel { position: fixed; z-index: 100; right: 1rem; bottom: 1rem; display: flex; width: min(340px, calc(100vw - 2rem)); flex-direction: column; align-items: flex-end; gap: .65rem; }
+.editor-panel { position: fixed; z-index: 100; right: 1rem; bottom: 1rem; display: flex; width: min(360px, calc(100vw - 2rem)); max-height: calc(100svh - 2rem); flex-direction: column; align-items: flex-end; gap: .65rem; }
 .editor-main-button { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: .78rem 1rem; color: #0a0a0a; background: #efce96; box-shadow: 0 14px 42px rgba(0,0,0,.38); font-size: .78rem; font-weight: 700; }
-.editor-options { width: 100%; border: 1px solid rgba(255,255,255,.14); border-radius: 1.25rem; padding: 1rem; color: white; background: rgba(12,12,12,.88); box-shadow: 0 18px 58px rgba(0,0,0,.42); backdrop-filter: blur(24px); }
+.editor-options { width: 100%; overflow-y: auto; border: 1px solid rgba(255,255,255,.14); border-radius: 1.25rem; padding: 1rem; color: white; background: rgba(12,12,12,.88); box-shadow: 0 18px 58px rgba(0,0,0,.42); backdrop-filter: blur(24px); }
 .editor-options strong, .editor-options small { display: block; }
 .editor-options strong { font-size: .82rem; }
 .editor-options small { margin-top: .2rem; color: rgba(255,255,255,.5); font-size: .67rem; }
 .editor-module-list { display: grid; gap: .38rem; margin-top: .8rem; }
-.editor-module-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-radius: .65rem; padding: .52rem .6rem; background: rgba(255,255,255,.06); font-size: .7rem; }
-.editor-module-row > span:last-child { display: flex; gap: .2rem; }
+.editor-module-row { display: grid; gap: .45rem; border-radius: .65rem; padding: .55rem .6rem; background: rgba(255,255,255,.06); font-size: .7rem; }
+.editor-module-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.editor-module-buttons { display: flex; gap: .2rem; }
 .editor-module-row button { display: grid; place-items: center; border-radius: .4rem; padding: .32rem; background: rgba(255,255,255,.08); }
 .editor-module-row button:disabled { opacity: .25; cursor: not-allowed; }
+.editor-module-settings { display: grid; grid-template-columns: 1fr 4.2rem; gap: .35rem; }
+.editor-module-settings select, .editor-module-settings button { width: 100%; border: 1px solid rgba(255,255,255,.1); border-radius: .45rem; padding: .4rem .48rem; color: white; background: #242424; font: inherit; }
+.editor-module-settings button { display: block; }
 .editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; margin-top: .8rem; }
 .editor-actions button { display: flex; align-items: center; justify-content: center; gap: .4rem; border-radius: .65rem; padding: .62rem; color: white; background: rgba(255,255,255,.1); font-size: .7rem; }
 .editor-options p { margin: .75rem 0 0; color: rgba(255,255,255,.46); font-size: .64rem; line-height: 1.45; }
 
 @media (max-width: 1279px) {
   main { min-height: 100svh; }
+}
+
+@media (min-width: 640px) {
+  .layout-region { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
