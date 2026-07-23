@@ -356,7 +356,7 @@ export default function App() {
             <AnimatedElement direction="up" delay={1000} className="mt-4 flex flex-col items-center"><EditableText value={data.copy.ageBadge} editing={editing} onChange={value => setCopy('ageBadge', value)} className="max-w-full rounded-full border border-[#EFCE96]/50 bg-[#EFCE96]/20 px-4 py-2 text-center text-xs font-medium tracking-wide text-white backdrop-blur-xl sm:px-6 sm:text-sm" /><RulerTicker /></AnimatedElement>
             {renderRegion('ageBottom', 'mt-6')}
           </section>
-          {renderRegion('side', 'w-full xl:w-[430px] xl:max-w-[38vw] xl:translate-y-6')}
+          {renderRegion('side', 'w-full xl:w-[380px] xl:max-w-[34vw] xl:translate-y-6')}
         </div>
         {renderRegion('pageBottom', 'mx-auto mt-8 max-w-[1160px]')}
       </div>
