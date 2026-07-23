@@ -25,7 +25,7 @@ import {
   X,
 } from 'lucide-react'
 
-const storageKey = 'ai-reasoning-lab-demo:v2'
+const storageKey = 'ai-reasoning-lab-demo:v3'
 const visualImages = [
   'https://polo-pecan-73837341.figma.site/_assets/v11/94903fdf21e145cd4ba873c15fc03251c0600ee5.png',
   'https://polo-pecan-73837341.figma.site/_assets/v11/0c38fdb8a933b0da384a5a3f8b0d9986bb919838.png',
