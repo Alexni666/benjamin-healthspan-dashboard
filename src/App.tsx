@@ -274,13 +274,13 @@ export default function App() {
 
   const renderCard = (id: CardId) => {
     const shared = `editor-card relative ${hidden(id) ? 'editor-card-hidden' : ''}`
-    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
+    if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-[14px] bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
       <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始内容推演" /></span>
     </article>
-    return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
+    return <article className={`${shared} experiment-card group flex min-h-[184px] w-full flex-col overflow-hidden rounded-[14px] bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
       <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
@@ -325,13 +325,13 @@ export default function App() {
       <AnimatedElement direction="down" delay={100} className="relative z-10">
         <nav className="flex items-start justify-between px-5 pt-6 sm:px-8 sm:pt-8 lg:px-12">
           <div className="flex items-center gap-3">
-            <button type="button" className={`logo-editor relative h-10 w-12 shrink-0 ${!data.logo && !editing ? 'hidden' : ''}`} disabled={!editing} onClick={() => logoInput.current?.click()} aria-label="更换品牌 Logo">
+            <button type="button" className={`logo-editor relative h-12 w-14 shrink-0 ${!data.logo && !editing ? 'hidden' : ''}`} disabled={!editing} onClick={() => logoInput.current?.click()} aria-label="更换品牌 Logo">
               {data.logo ? <img src={data.logo} alt={data.copy.brandName} className="h-full w-full object-contain object-left" /> : <span className="grid h-full w-full place-items-center rounded-lg border border-dashed border-[#EFCE96]/60 text-[#EFCE96]"><Pencil size={16} /></span>}
               {editing && data.logo && <span className="absolute inset-0 grid place-items-center rounded-lg bg-black/55"><Pencil size={17} /></span>}
             </button>
             <span className="flex flex-col">
-              <EditableText value={data.copy.brandName} editing={editing} onChange={value => setCopy('brandName', value)} className="text-sm font-semibold tracking-[.08em] sm:text-base" />
-              <EditableText value={data.copy.brandEnglish} editing={editing} onChange={value => setCopy('brandEnglish', value)} className="mt-0.5 text-[9px] tracking-[.22em] text-white/55 sm:text-[10px]" />
+              <EditableText value={data.copy.brandName} editing={editing} onChange={value => setCopy('brandName', value)} className="text-base font-semibold tracking-[.08em] sm:text-lg" />
+              <EditableText value={data.copy.brandEnglish} editing={editing} onChange={value => setCopy('brandEnglish', value)} className="mt-0.5 text-[10px] tracking-[.22em] text-white/55 sm:text-[11px]" />
             </span>
           </div>
           <input ref={logoInput} type="file" accept="image/*" hidden onChange={event => { loadImage(event.target.files?.[0], 'logo'); event.target.value = '' }} />
