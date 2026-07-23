@@ -542,7 +542,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
             <textarea value={lab.inputs.story} onChange={event => updateInput('story', event.target.value)} rows={5} placeholder="故事梗概或完整故事文档。" />
             {storyFileName && <p className="lab-file-status">已导入：{storyFileName}</p>}
           </Panel>
-          <Panel><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="行动方式、信息交换和结局条件。" /></Panel>
+          <Panel><div className="lab-field-header"><label className="lab-field-label"><LockKeyhole size={15} />游戏规则</label></div><textarea value={lab.inputs.rules} onChange={event => updateInput('rules', event.target.value)} rows={5} placeholder="行动方式、信息交换和结局条件。" /></Panel>
         </div>
 
         <div className="lab-input-bottom-grid mt-4">
