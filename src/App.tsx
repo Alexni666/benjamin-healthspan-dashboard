@@ -46,18 +46,18 @@ type EditorData = {
 const defaultCopy: Copy = {
   brandName: 'AI内容试验场',
   brandEnglish: 'AI CONTENT LAB',
-  name: '内容创新实验控制台',
+  name: '实验控制台',
   ageLabel: '正在孵化的实验方向',
   metric: '03',
-  ageBadge: '从内容创意到可验证方案',
-  activitiesTitle: 'AI内容推理实验室',
-  activitiesMeta: '开始实验',
-  activitiesIntro: '输入故事详情、游戏规则、人物数量和预计时长。',
-  activitiesBody: 'AI自动生成剧情节点、人物任务、线索机关、场景方向、平面布局和视觉方案，并模拟不同玩家进行试玩，输出风险与修改建议。',
-  insightsTitle: 'AI案例进化引擎',
-  insightsMeta: '进入引擎',
-  insightsIntro: '沉淀历史案件、试玩数据、修改过程和最终结论，逐步形成团队自己的内容经验库。',
-  insightsBody: '根据主题、人数、时长和场景等条件，生成新的案例创意，分析方案优势、潜在问题、相似风险与改进方向。',
+  ageBadge: '先验证，再制作',
+  activitiesTitle: '内容推理实验室',
+  activitiesMeta: '开始推演',
+  activitiesIntro: '输入故事与规则，生成场景并完成模拟试玩。',
+  activitiesBody: '内容生成 · 场景推演 · 风险分析',
+  insightsTitle: '案例进化引擎',
+  insightsMeta: '生成案例',
+  insightsIntro: '沉淀历史案件与试玩结果，生成新案例并给出改进建议。',
+  insightsBody: '案例沉淀 · 创意生成 · 方案优化',
 }
 
 const defaultOrder: CardId[] = ['activities', 'insights']
@@ -66,8 +66,8 @@ const defaultLayout: Record<CardId, CardPlacement> = {
   insights: { region: 'side', width: 'full' },
 }
 const cardLabels: Record<CardId, string> = {
-  activities: 'AI内容推理实验室',
-  insights: 'AI案例进化引擎',
+  activities: '内容推理实验室',
+  insights: '案例进化引擎',
 }
 const regionLabels: Record<RegionId, string> = {
   side: '右侧',
@@ -78,10 +78,10 @@ const regionLabels: Record<RegionId, string> = {
 function loadEditorData(): EditorData {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey) || '{}') as Partial<EditorData>
-    const currentContent = stored.contentVersion === 4
+    const currentContent = stored.contentVersion === 5
     const storedLayout = currentContent ? stored.layout || {} as Partial<Record<CardId, CardPlacement>> : {}
     return {
-      contentVersion: 4,
+      contentVersion: 5,
       copy: currentContent ? { ...defaultCopy, ...(stored.copy || {}) } : defaultCopy,
       logo: stored.logo && stored.logo !== legacyLogo ? stored.logo : defaultLogo,
       avatar: stored.avatar || defaultAvatar,
@@ -90,7 +90,7 @@ function loadEditorData(): EditorData {
       layout: Object.fromEntries(defaultOrder.map(id => [id, { ...defaultLayout[id], ...(storedLayout[id] || {}) }])) as Record<CardId, CardPlacement>,
     }
   } catch {
-    return { contentVersion: 4, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout }
+    return { contentVersion: 5, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout }
   }
 }
 
@@ -250,7 +250,7 @@ export default function App() {
   }
 
   const exportEdits = () => {
-    const blob = new Blob([JSON.stringify({ version: 4, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ version: 5, exportedAt: new Date().toISOString(), ...data }, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -262,7 +262,7 @@ export default function App() {
   const resetEdits = () => {
     if (!window.confirm('确定清除当前浏览器里的全部修改吗？')) return
     localStorage.removeItem(storageKey)
-    setData({ contentVersion: 4, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout })
+    setData({ contentVersion: 5, copy: defaultCopy, logo: defaultLogo, avatar: defaultAvatar, order: defaultOrder, hidden: [], layout: defaultLayout })
   }
 
   const cardControls = (id: CardId) => editing && (
@@ -277,14 +277,14 @@ export default function App() {
     if (id === 'activities') return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .2), rgba(10, 10, 10, .02)), url(${insightsImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.activitiesTitle} editing={editing} onChange={value => setCopy('activitiesTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.activitiesIntro} editing={editing} onChange={value => setCopy('activitiesIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
-      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
-      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始 AI 内容推理实验" /></span>
+      <EditableText value={data.copy.activitiesBody} editing={editing} onChange={value => setCopy('activitiesBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
+      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.activitiesMeta} editing={editing} onChange={value => setCopy('activitiesMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="开始内容推演" /></span>
     </article>
     return <article className={`${shared} experiment-card group flex min-h-[220px] w-full flex-col overflow-hidden rounded-2xl bg-cover bg-center p-4 text-left transition-[filter,transform] hover:brightness-110 sm:rounded-[20px] sm:p-5`} style={{ backgroundImage: `linear-gradient(100deg, rgba(28, 14, 12, .18), rgba(10, 10, 10, .02)), url(${planImage})` }}>
       {cardControls(id)}<EditableText value={data.copy.insightsTitle} editing={editing} onChange={value => setCopy('insightsTitle', value)} className="pr-12 text-base font-semibold sm:text-lg" />
       <EditableText value={data.copy.insightsIntro} editing={editing} onChange={value => setCopy('insightsIntro', value)} multiline className="mt-3 block text-xs font-medium leading-relaxed text-white/90" />
-      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-2 block text-xs leading-relaxed text-white/80" />
-      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.insightsMeta} editing={editing} onChange={value => setCopy('insightsMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="进入 AI 案例进化引擎" /></span>
+      <EditableText value={data.copy.insightsBody} editing={editing} onChange={value => setCopy('insightsBody', value)} multiline className="mt-3 block text-[10px] leading-relaxed tracking-[.08em] text-white/50 sm:text-[11px]" />
+      <span className="mt-auto flex items-end justify-between pt-4"><EditableText value={data.copy.insightsMeta} editing={editing} onChange={value => setCopy('insightsMeta', value)} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black" /><ArrowButton label="生成新案例" /></span>
     </article>
   }
 
