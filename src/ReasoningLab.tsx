@@ -141,10 +141,10 @@ function Panel({ children, className = '' }: { children: ReactNode; className?: 
 
 function StageHeading({ eyebrow, title, copy }: { eyebrow: string; title: string; copy: string }) {
   return (
-    <header className="mb-7 max-w-3xl">
-      <p className="mb-2 text-[11px] font-semibold tracking-[.22em] text-[#efb876]">{eyebrow}</p>
+    <header className="lab-stage-heading mb-7 max-w-3xl">
+      <p className="mb-2 text-[11px] font-semibold tracking-[.22em] text-[#f2ca94]">{eyebrow}</p>
       <h1 className="text-2xl font-semibold tracking-[-.03em] text-white sm:text-3xl">{title}</h1>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">{copy}</p>
+      <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">{copy}</p>
     </header>
   )
 }
@@ -169,7 +169,7 @@ function PlanSketch({ variant }: { variant: string }) {
 function ScoreBar({ label, value, after }: { label: string; value: number; after?: number }) {
   return (
     <div className="grid grid-cols-[88px_1fr_34px] items-center gap-3 text-xs">
-      <span className="text-white/55">{label}</span>
+      <span className="text-white/70">{label}</span>
       <div className="relative h-1.5 overflow-hidden rounded-full bg-white/8">
         <span className="absolute inset-y-0 left-0 rounded-full bg-[#d77751]" style={{ width: `${value}%` }} />
         {after !== undefined && <span className="absolute inset-y-0 left-0 rounded-full bg-[#74c6cf]" style={{ width: `${after}%` }} />}
@@ -386,18 +386,21 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const showNext = lab.step < stages.length - 1
 
   return (
-    <main className="lab-shell min-h-[100svh] bg-[#07090a] text-white">
+    <main className="lab-shell min-h-[100svh] text-white">
+      <video className="lab-background-video" src="/dna-background.mp4" autoPlay loop muted playsInline preload="auto" aria-hidden="true" />
+      <div className="lab-background-wash" aria-hidden="true" />
+      <div className="lab-background-grid" aria-hidden="true" />
       <aside className="lab-sidebar">
         <button type="button" className="lab-back-button" onClick={onBack}><ArrowLeft size={16} />返回实验场</button>
-        <div className="mt-8"><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/30">AI REASONING LAB</p></div>
+        <div className="mt-8"><p className="text-sm font-semibold">内容推理实验室</p><p className="mt-1 text-[10px] tracking-[.2em] text-white/50">AI REASONING LAB</p></div>
         <nav className="mt-8 grid grid-cols-5 gap-1 lg:grid-cols-1" aria-label="实验进度">
           {stages.map(([number, label], index) => <button type="button" disabled={index > lab.maxVisited} className={`lab-stage-button ${index === lab.step ? 'lab-stage-button-active' : ''}`} onClick={() => go(index)} key={number}><span>{number}</span><strong>{label}</strong>{index < lab.step && <Check size={13} />}</button>)}
         </nav>
-        <div className="mt-auto hidden rounded-xl border border-white/8 bg-white/[.025] p-3 text-[11px] leading-5 text-white/35 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#9ce2e8]"><WandSparkles size={13} />演示模式</span><br />API 已保留但未调用。页面使用预置样本和本地计算。</div>
+        <div className="lab-demo-note mt-auto hidden rounded-xl p-3 text-[11px] leading-5 text-white/55 lg:block"><span className="mb-2 inline-flex items-center gap-1.5 text-[#aee9ee]"><WandSparkles size={13} />演示模式</span><br />API 已保留但未调用。页面使用预置样本和本地计算。</div>
       </aside>
 
       <section className="lab-workspace">
-        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/35"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/65">{stages[lab.step][1]}</span></div><span className="inline-flex items-center gap-1.5 rounded-full border border-[#8fd8df]/20 bg-[#8fd8df]/8 px-3 py-1.5 text-[10px] text-[#9ce2e8]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd8df]" />API 未调用</span></header>
+        <header className="lab-topbar"><div className="flex items-center gap-2 text-[11px] text-white/55"><LayoutDashboard size={14} /><span>实验控制台</span><span>/</span><span className="text-white/85">{stages[lab.step][1]}</span></div><span className="inline-flex items-center gap-1.5 rounded-full border border-[#8fd8df]/30 bg-[#8fd8df]/10 px-3 py-1.5 text-[10px] text-[#b5eef2]"><span className="h-1.5 w-1.5 rounded-full bg-[#8fd8df]" />API 未调用</span></header>
         <div className="lab-content">{content}</div>
         <footer className="lab-footer">
           <button type="button" className="lab-secondary-button" disabled={lab.step === 0} onClick={() => go(Math.max(0, lab.step - 1))}><ArrowLeft size={15} />上一步</button>
