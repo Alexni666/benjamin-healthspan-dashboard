@@ -112,6 +112,7 @@ type SavedLab = {
   maxVisited: number
   inputs: Inputs
   selectedPlan: string
+  confirmedPlan: string
   writerNote: string
   executionConstraints: string
   revisionDrafts: Record<string, string>
@@ -146,7 +147,6 @@ const stages = [
 const plans = [
   { id: 'A', title: '集中控制型', meta: '拍摄与执行优先', copy: '以大堂为中枢，六个功能区围绕核心动线展开。控场、跟拍和人员调度更稳定。' },
   { id: 'B', title: '探索强化型', meta: '沉浸与搜证优先', copy: '采用长廊与分层空间，增加隐藏区域和探索距离，换取更强的发现感。' },
-  { id: 'C', title: '低改造成本型', meta: '现成场地优先', copy: '复用客房、餐厅、会议室与后勤通道，降低搭建成本和勘景难度。' },
 ]
 
 const demoV1: V1Draft = {
@@ -226,7 +226,7 @@ const analysisSteps = [
   ['风险诊断汇总', '记录卡关、绕规则与节奏异常的具体事件'],
 ]
 
-const analysisMetrics = ['6 个剧情阶段', '6 个角色目标', '12 条规则关系', '36 条玩家路径', '3 类空间影响', '6 项风险事件']
+const analysisMetrics = ['6 个剧情阶段', '6 个角色目标', '12 条规则关系', '36 条玩家路径', '2 类空间策略', '6 项风险事件']
 
 const defaultRevisionDrafts = Object.fromEntries(demoSimulation.findings.map(finding => [finding.id, finding.suggestion]))
 
@@ -236,6 +236,7 @@ function loadSaved(): SavedLab {
     maxVisited: 0,
     inputs: defaultInputs,
     selectedPlan: 'A',
+    confirmedPlan: '',
     writerNote: '',
     executionConstraints: '',
     revisionDrafts: defaultRevisionDrafts,
@@ -351,7 +352,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const activeQuestions = lab.analysis?.questions?.length ? lab.analysis.questions : demoQuestions
   const activeV1 = lab.analysis?.v1 || demoV1
   const activeSimulation = lab.analysis?.simulation || demoSimulation
-  const activePlans = activeV1.spaceDirections.length === 3 ? activeV1.spaceDirections : plans
+  const activePlans = activeV1.spaceDirections.length === 2 ? activeV1.spaceDirections : plans
   const findingWeight = (finding: SimulationFinding) => finding.level === 'P0' ? 6 : finding.level === 'P1' ? 3 : 1
   const totalFindingWeight = activeSimulation.findings.reduce((total, finding) => total + findingWeight(finding), 0)
   const selectedFindingWeight = activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).reduce((total, finding) => total + findingWeight(finding), 0)
@@ -430,6 +431,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       setAnalysisRun({ state: 'running', step: analysisSteps.length - 1, message: '分析完成，正在写入结果…' })
       updateLab({
         analysis: { ...result.analysis, usage: result.usage },
+        selectedPlan: 'A',
+        confirmedPlan: '',
         revisionDrafts: Object.fromEntries(result.analysis.simulation?.findings.map(finding => [finding.id, finding.suggestion]) || []),
         fixes: [],
         secondTestDone: false,
@@ -474,7 +477,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       '首轮具体反馈：',
       ...activeSimulation.findings.map(finding => `- [${finding.level}] ${finding.time}｜${finding.actor}：${finding.event} 影响：${finding.impact}`),
       '',
-      `采用方案：${lab.selectedPlan} ${activePlans.find(plan => plan.id === lab.selectedPlan)?.title}`,
+      `采用方案：${lab.confirmedPlan ? `${lab.confirmedPlan} ${activePlans.find(plan => plan.id === lab.confirmedPlan)?.title}` : '尚未确认空间方向'}`,
       '',
       `创作基线版本：V1.0`,
       `验证后版本：${lab.secondTestDone ? 'V1.1' : '尚未运行二次验证'}`,
@@ -617,29 +620,35 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         </>}
 
         {v1Tab === 'space' && <>
-          <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SPACE IMPACT</p><h2 className="mt-1 text-sm font-semibold">由首轮行为问题带出的三个空间方向</h2></div><span className="lab-tag">当前查看 {lab.selectedPlan}</span></div>
-          <div className="grid gap-4 xl:grid-cols-3">
-            {activePlans.map(plan => <button type="button" className={`lab-plan-card ${lab.selectedPlan === plan.id ? 'lab-plan-card-selected' : ''}`} onClick={() => updateLab({ selectedPlan: plan.id })} key={plan.id}>
+          <div className="mb-4 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SPACE DIRECTION</p><h2 className="mt-1 text-sm font-semibold">由首轮行为问题带出的两套空间方向</h2></div><span className="lab-tag">当前选择 {lab.selectedPlan}</span></div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {activePlans.map(plan => <button type="button" className={`lab-plan-card ${lab.selectedPlan === plan.id ? 'lab-plan-card-selected' : ''}`} onClick={() => updateLab({ selectedPlan: plan.id, confirmedPlan: lab.confirmedPlan === plan.id ? lab.confirmedPlan : '' })} key={plan.id}>
               <div className="lab-plan-sketch"><PlanSketch variant={plan.id} /></div>
               <div className="mt-5 flex items-start justify-between"><div><span className="text-xs text-[#efb876]">方案 {plan.id}</span><h2 className="mt-1 text-lg font-semibold">{plan.title}</h2></div>{lab.selectedPlan === plan.id && <CheckCircle2 className="text-[#8fd8df]" size={20} />}</div>
               <p className="mt-3 text-xs tracking-[.12em] text-white/35">{plan.meta}</p><p className="mt-3 text-sm leading-6 text-white/55">{plan.copy}</p>
             </button>)}
           </div>
-          <div className="mb-4 mt-8 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SELECTED DIRECTION</p><h2 className="mt-1 text-sm font-semibold">{activePlans.find(plan => plan.id === lab.selectedPlan)?.title}｜三张空间推演图</h2></div><span className="lab-tag">创意方向，不覆盖场地图纸</span></div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {[
-              ['总体空间关系图', '入口、公共区、搜证区、高潮区与后勤区的连接关系'],
-              ['主要楼层平面图', '房间尺度、玩家路线、工作人员路线与楼层连接'],
-              ['关键区域详图', '核心机关、隐藏通道与高潮区域的触发和安全范围'],
-            ].map(([title, copy], index) => <Panel key={title}><div className="lab-plan-preview"><PlanSketch variant={['A', 'B', 'C'][index]} /></div><div className="mt-4 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-[11px] leading-5 text-white/40">{copy}</p></div><span className="lab-tag">{String(index + 1).padStart(2, '0')}</span></div></Panel>)}
+          <div className="lab-space-confirm mt-4">
+            <div><span>当前方向</span><strong>{lab.selectedPlan} · {activePlans.find(plan => plan.id === lab.selectedPlan)?.title}</strong><p>确认后再生成空间草案，避免一次产生无效方案。</p></div>
+            <button type="button" className="lab-primary-button" onClick={() => updateLab({ confirmedPlan: lab.selectedPlan })}>{lab.confirmedPlan === lab.selectedPlan ? <><Check size={15} />已确认</> : <><Layers3 size={15} />确认并生成</>}</button>
           </div>
-          <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">空间影响与场景效果示意</h2></div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {['信息交换区', '核心机关区', '高潮与结局区'].map((title, index) => <Panel key={title}>
-              <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-cover bg-center" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(3,5,6,.72)), url(${uploads[index] || visualImages[index]})` }}><span className="lab-scene-label absolute bottom-3 left-3 text-xs font-medium">{title}</span></div>
-              <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">与当前空间方向关联 · 可替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
-            </Panel>)}
-          </div>
+          {lab.confirmedPlan === lab.selectedPlan && <>
+            <div className="mb-4 mt-8 flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">SELECTED DIRECTION</p><h2 className="mt-1 text-sm font-semibold">{activePlans.find(plan => plan.id === lab.selectedPlan)?.title}｜空间结构草案</h2></div><span className="lab-tag">当前为推演草案，不是施工图</span></div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {[
+                ['总体空间关系图', '入口、公共区、搜证区、高潮区与后勤区的连接关系'],
+                ['主要楼层平面图', '房间尺度、玩家路线、工作人员路线与楼层连接'],
+                ['关键区域详图', '核心机关、隐藏通道与高潮区域的触发和安全范围'],
+              ].map(([title, copy], index) => <Panel key={title}><div className="lab-plan-preview"><PlanSketch variant={lab.selectedPlan} /></div><div className="mt-4 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-[11px] leading-5 text-white/40">{copy}</p></div><span className="lab-tag">{String(index + 1).padStart(2, '0')}</span></div></Panel>)}
+            </div>
+            <div className="mb-4 mt-8"><p className="text-[10px] tracking-[.16em] text-white/40">SCENE VISUALS</p><h2 className="mt-1 text-sm font-semibold">效果图占位与人工替换</h2></div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {['信息交换区', '核心机关区', '高潮与结局区'].map((title, index) => <Panel key={title}>
+                <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-cover bg-center" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(3,5,6,.72)), url(${uploads[index] || visualImages[index]})` }}><span className="lab-scene-label absolute bottom-3 left-3 text-xs font-medium">{title}</span></div>
+                <div className="mt-4 flex items-center justify-between"><div><p className="text-sm font-semibold">效果示意 {index + 1}</p><p className="mt-1 text-[11px] text-white/35">图片模型未接入 · 可手动替换</p></div><label className="lab-icon-button cursor-pointer"><ImagePlus size={15} /><input type="file" accept="image/*" hidden onChange={event => { loadVisual(index, event.target.files?.[0]); event.target.value = '' }} /></label></div>
+              </Panel>)}
+            </div>
+          </>}
         </>}
 
         {v1Tab === 'basis' && <>

@@ -154,10 +154,10 @@ function parseAnalysis(value: unknown) {
     .filter(Boolean)
     .slice(0, 8)
   const rawDirections = Array.isArray(rawV1.spaceDirections) ? rawV1.spaceDirections : []
-  const spaceDirections = rawDirections.slice(0, 3).map((item, index): SpaceDirection => {
+  const spaceDirections = rawDirections.slice(0, 2).map((item, index): SpaceDirection => {
     const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
     return {
-      id: ['A', 'B', 'C'][index],
+      id: ['A', 'B'][index],
       title: cleanText(row.title, 80) || `空间方向 ${index + 1}`,
       meta: cleanText(row.meta, 80),
       copy: cleanText(row.copy, 500),
@@ -236,7 +236,7 @@ function parseAnalysis(value: unknown) {
     || !v1.clueChain
     || !v1.mechanics
     || !v1.recovery
-    || spaceDirections.length < 3
+    || spaceDirections.length < 2
     || !simulation.verdict
     || !simulation.headline
     || findings.length < 4
@@ -344,7 +344,7 @@ export default {
 
 simulation.findings 必须输出 6 项具体事件，禁止只写“节奏不足、角色参与度低”这类抽象评价；每项必须包含发生时间、行为主体、具体动作、实际后果和触发证据。playerRuns 必须输出 6 种明显不同的玩家策略。timeline 输出 5 至 7 个连续时间阶段。pathCount、checks、coverage 和 blockers 应与本轮实际分析规模一致，不要机械使用示例数字。
 
-insights 必须恰好 6 项并依次覆盖：核心命题、主冲突结构、世界与规则边界、人物关系动力、戏剧时间线、体验目标。每项 evidence 必须说明输入依据；无法确定时写待确认。model.beats 输出 5 至 8 个名称简短的节点。spaceDirections 必须输出 3 个明显不同的方向，并明确回应首轮出现的行动或空间问题。questions 输出 3 至 6 个真正需要编剧决定、AI不能代替判断的问题。
+insights 必须恰好 6 项并依次覆盖：核心命题、主冲突结构、世界与规则边界、人物关系动力、戏剧时间线、体验目标。每项 evidence 必须说明输入依据；无法确定时写待确认。model.beats 输出 5 至 8 个名称简短的节点。spaceDirections 必须恰好输出 2 个方向：第一项为“集中控制型”，重点解决控场、拍摄、人员调度和信息汇合；第二项为“探索强化型”，重点解决分层探索、隐藏区域、发现感和行动路径。两项都要明确回应首轮出现的行动或空间问题。questions 输出 3 至 6 个真正需要编剧决定、AI不能代替判断的问题。
 
 当输入资料不足时，可以为了模拟建立假设，但必须在 evidence 或 summary 中明确标注为“模拟假设”，不能把补充内容伪装成用户原稿。`,
               },
