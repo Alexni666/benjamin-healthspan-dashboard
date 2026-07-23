@@ -551,7 +551,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
             <div className="lab-result-status"><span /><strong>首轮模拟完成</strong><small>{lab.analysis ? 'DEEPSEEK LIVE RUN' : 'DEMO RUN'}</small></div>
             <h2>{activeSimulation.verdict}</h2>
             <p>{activeSimulation.headline}</p>
-            <small className="lab-result-score-reason">{activeSimulation.scoreReason}</small>
+            <small className="lab-result-score-reason">{activeSimulation.scoreReason || '当前显示的是旧版分析基线；重新运行 DeepSeek 分析后，会生成本轮评分依据。'}</small>
           </div>
           <div className="lab-result-score">
             <span>首轮可运行度</span>
