@@ -707,13 +707,22 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     if (lab.step === 3) return (
       <>
         <StageHeading eyebrow="04 / WRITER REVISION" title="编剧修改与二次试玩" copy="围绕首轮发生的具体事件修改原始版本。AI建议只作参考，是否修改、怎样修改仍由编剧决定。" />
-        <div className="lab-revision-brief mb-5">
-          <div className="lab-revision-brief-heading"><span>REVISION BRIEF</span><h2>先确定本轮修改边界</h2><p>编剧意图优先，执行限制只约束落地方式。</p></div>
-          <Panel><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false })} /></Panel>
-          <Panel><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false })} /></Panel>
+        <Panel className="lab-revision-brief mb-5">
+          <div className="lab-revision-brief-heading">
+            <div><span>REVISION BRIEF</span><h2>本轮修改边界</h2></div>
+            <p>编剧意图优先，执行限制只约束落地方式。</p>
+          </div>
+          <div className="lab-revision-brief-fields">
+            <div className="lab-revision-field"><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false })} /></div>
+            <div className="lab-revision-field"><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false })} /></div>
+          </div>
+        </Panel>
+        <div className="lab-revision-section-title">
+          <div><p>WRITER REVISION</p><h2>针对首轮具体事件编辑修改内容</h2></div>
+          <span>{activeSimulation.findings.length} 项待审</span>
         </div>
         <div className="lab-revision-workspace">
-          <div><div className="mb-4"><p className="text-[10px] tracking-[.16em] text-white/40">WRITER REVISION</p><h2 className="mt-1 text-sm font-semibold">针对首轮具体事件编辑修改内容</h2></div><div className="lab-revision-grid">{activeSimulation.findings.map((finding, index) => {
+          <div className="lab-revision-grid">{activeSimulation.findings.map((finding, index) => {
             const active = lab.fixes.includes(finding.id)
             return <section className={`lab-revision-card ${active ? 'lab-revision-card-active' : ''}`} key={finding.id}>
               <div className="lab-revision-card-header">
@@ -726,7 +735,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               <textarea rows={3} value={lab.revisionDrafts[finding.id] || finding.suggestion} onChange={event => updateRevision(finding.id, event.target.value)} />
               <div className="lab-revision-card-footer"><span>{active ? '将进入 V1.1 二次验证' : '当前不改变原始版本'}</span><button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(finding.id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button></div>
             </section>
-          })}</div></div>
+          })}</div>
           <Panel className="lab-revision-summary"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="lab-revision-score"><div><strong>{firstScore}</strong><p>V1.0 基线</p></div><ArrowRight /><div><strong>{lab.secondTestDone ? secondScore : '—'}</strong><p>V1.1 验证后</p></div></div><div className="lab-revision-progress"><span style={{ width: `${Math.min(100, lab.fixes.length / Math.max(1, activeSimulation.findings.length) * 100)}%` }} /></div><p className="lab-revision-summary-copy">已纳入 <strong>{lab.fixes.length}</strong> / {activeSimulation.findings.length} 项。只有重新运行受影响路线后，评分和最终结论才会更新。</p><button type="button" className="lab-primary-button w-full justify-center" disabled={lab.fixes.length === 0} onClick={() => updateLab({ secondTestDone: true })}><RefreshCw size={15} />运行二次模拟试玩</button>{lab.secondTestDone && <div className="lab-revision-complete"><CheckCircle2 size={14} />已重跑 {lab.fixes.length + 3} 条受影响路线，结果已写入 V1.1。</div>}</Panel>
         </div>
       </>
