@@ -6,5 +6,6 @@ output/
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+build/*.js
+build/*.d.ts
 .DS_Store
-
