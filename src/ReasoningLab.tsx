@@ -105,6 +105,36 @@ type SimulationResult = {
   timeline: Array<{ time: string; event: string; outcome: string }>
 }
 
+type RetestDimension = {
+  label: string
+  score: number
+  evidence: string
+}
+
+type RetestRoute = {
+  findingId: string
+  title: string
+  status: '已解决' | '仍存在' | '新增风险'
+  evidence: string
+}
+
+type SecondTestResult = {
+  score: number
+  verdict: string
+  summary: string
+  rerunPaths: number
+  remainingBlockers: number
+  newRisks: string[]
+  dimensions: RetestDimension[]
+  routes: RetestRoute[]
+  humanChecks: string[]
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+}
+
 type AnalysisResult = {
   summary: string
   insights: AnalysisInsight[]
@@ -130,6 +160,7 @@ type SavedLab = {
   fixes: string[]
   secondTestDone: boolean
   analysis?: AnalysisResult
+  secondTest?: SecondTestResult
 }
 
 const defaultInputs: Inputs = {
@@ -244,6 +275,15 @@ const analysisSteps = [
 ]
 
 const analysisMetrics = ['6 个剧情阶段', '6 个角色目标', '12 条规则关系', '36 条玩家路径', '2 类空间策略', '6 项风险事件']
+const secondAnalysisSteps = [
+  ['载入修改版本', '比对 V1.0 问题与 V1.1 编剧修改'],
+  ['重建受影响规则', '更新触发条件、证据链和恢复路径'],
+  ['复跑相关路线', '重跑受影响玩家路径与相邻替代路径'],
+  ['核验问题变化', '判断首轮问题是解决、仍存在或转移'],
+  ['检查新增风险', '识别修改后出现的新卡关和节奏问题'],
+  ['形成二轮结论', '独立计算评分并输出下一步验证建议'],
+]
+const secondAnalysisMetrics = ['V1.1 修改已载入', '规则关系已更新', '受影响路径已复跑', '首轮问题已对照', '新增风险已检查', '二轮结果已形成']
 
 const defaultRevisionDrafts = Object.fromEntries(demoSimulation.findings.map(finding => [finding.id, finding.suggestion]))
 
@@ -271,6 +311,7 @@ function loadSaved(): SavedLab {
         characters: stored.inputs?.characters?.length ? stored.inputs.characters : defaultInputs.characters,
       },
       revisionDrafts: { ...defaultRevisionDrafts, ...(stored.revisionDrafts || {}) },
+      secondTestDone: Boolean(stored.secondTestDone && stored.secondTest),
       step: Math.min(Math.max(stored.step || 0, 0), stages.length - 1),
       maxVisited: Math.min(Math.max(stored.maxVisited || 0, 0), stages.length - 1),
     }
@@ -317,7 +358,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const [storyFileName, setStoryFileName] = useState('')
   const [storyFileLoading, setStoryFileLoading] = useState(false)
   const [connection, setConnection] = useState<{ state: 'idle' | 'testing' | 'connected' | 'error'; message: string }>({ state: 'idle', message: '尚未验证连接' })
-  const [analysisRun, setAnalysisRun] = useState<{ state: 'idle' | 'running' | 'error'; step: number; message: string }>({ state: 'idle', step: 0, message: '' })
+  const [analysisRun, setAnalysisRun] = useState<{ state: 'idle' | 'running' | 'error'; step: number; message: string; mode: 'first' | 'second' }>({ state: 'idle', step: 0, message: '', mode: 'first' })
 
   useEffect(() => localStorage.setItem(storageKey, JSON.stringify(lab)), [lab])
   useEffect(() => {
@@ -380,22 +421,14 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   const activeSimulation = lab.analysis?.simulation || demoSimulation
   const activePlans = activeV1.spaceDirections.length === 2 ? activeV1.spaceDirections : plans
   const blockerFindings = activeSimulation.findings.filter(finding => finding.level === 'P0')
-  const findingWeight = (finding: SimulationFinding) => finding.level === 'P0' ? 6 : finding.level === 'P1' ? 3 : 1
-  const totalFindingWeight = activeSimulation.findings.reduce((total, finding) => total + findingWeight(finding), 0)
-  const selectedFindingWeight = activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).reduce((total, finding) => total + findingWeight(finding), 0)
   const firstScore = activeSimulation.score || 68
   const firstRating = firstScore >= 85 ? '接近真人验证' : firstScore >= 70 ? '基本可运行' : firstScore >= 55 ? '可运行，需修复' : '结构尚未闭合'
-  const simulatedScore = Math.min(89, Math.round(firstScore + (89 - firstScore) * (selectedFindingWeight / Math.max(1, totalFindingWeight))))
-  const secondScore = lab.secondTestDone ? simulatedScore : firstScore
-  const remainingBlockers = activeSimulation.findings.filter(finding => finding.level === 'P0' && !lab.fixes.includes(finding.id)).length
-  const readyForTabletop = lab.secondTestDone && remainingBlockers === 0 && secondScore >= 79
-  const updateRevision = (id: string, value: string) => updateLab({ revisionDrafts: { ...lab.revisionDrafts, [id]: value }, secondTestDone: false })
-  const toggleFix = (id: string) => updateLab({ fixes: lab.fixes.includes(id) ? lab.fixes.filter(item => item !== id) : [...lab.fixes, id], secondTestDone: false })
-  const dimensionAfter = (_label: string, before: number, target: number) => {
-    if (!lab.secondTestDone) return before
-    const improvementRatio = selectedFindingWeight / Math.max(1, totalFindingWeight)
-    return Math.min(target, Math.round(before + (target - before) * improvementRatio))
-  }
+  const secondScore = lab.secondTest?.score ?? firstScore
+  const remainingBlockers = lab.secondTest?.remainingBlockers ?? blockerFindings.length
+  const readyForTabletop = Boolean(lab.secondTestDone && lab.secondTest && remainingBlockers === 0 && secondScore >= 79)
+  const updateRevision = (id: string, value: string) => updateLab({ revisionDrafts: { ...lab.revisionDrafts, [id]: value }, secondTestDone: false, secondTest: undefined })
+  const toggleFix = (id: string) => updateLab({ fixes: lab.fixes.includes(id) ? lab.fixes.filter(item => item !== id) : [...lab.fixes, id], secondTestDone: false, secondTest: undefined })
+  const dimensionAfter = (label: string, before: number) => lab.secondTest?.dimensions.find(item => item.label === label)?.score ?? before
 
   const saveDeepSeekConnection = async () => {
     if (!apiKey.trim()) {
@@ -433,12 +466,12 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       return
     }
     if (!lab.inputs.story.trim()) {
-      setAnalysisRun({ state: 'error', step: 0, message: '请先填写故事详情。' })
+      setAnalysisRun({ state: 'error', step: 0, message: '请先填写故事详情。', mode: 'first' })
       return
     }
 
     const startedAt = Date.now()
-    setAnalysisRun({ state: 'running', step: 0, message: '正在建立首轮模拟任务…' })
+    setAnalysisRun({ state: 'running', step: 0, message: '正在建立首轮模拟任务…', mode: 'first' })
     const progressTimer = window.setInterval(() => {
       setAnalysisRun(current => current.state === 'running'
         ? { ...current, step: Math.min(current.step + 1, analysisSteps.length - 2) }
@@ -457,7 +490,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       const remaining = Math.max(0, 2800 - (Date.now() - startedAt))
       if (remaining) await new Promise(resolve => window.setTimeout(resolve, remaining))
       window.clearInterval(progressTimer)
-      setAnalysisRun({ state: 'running', step: analysisSteps.length - 1, message: '分析完成，正在写入结果…' })
+      setAnalysisRun({ state: 'running', step: analysisSteps.length - 1, message: '分析完成，正在写入结果…', mode: 'first' })
       updateLab({
         analysis: { ...result.analysis, usage: result.usage },
         selectedPlan: 'A',
@@ -465,16 +498,75 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         revisionDrafts: Object.fromEntries(result.analysis.simulation?.findings.map(finding => [finding.id, finding.suggestion]) || []),
         fixes: [],
         secondTestDone: false,
+        secondTest: undefined,
       })
       window.setTimeout(() => {
-        setAnalysisRun({ state: 'idle', step: 0, message: '' })
+        setAnalysisRun({ state: 'idle', step: 0, message: '', mode: 'first' })
         go(1)
       }, 650)
     } catch (error) {
       window.clearInterval(progressTimer)
       const message = error instanceof Error ? error.message : '分析没有完成，请稍后重试。'
       if (message.includes('密钥')) setConnection({ state: 'idle', message: '保存的密钥已失效，请重新设置。' })
-      setAnalysisRun({ state: 'error', step: 0, message })
+      setAnalysisRun({ state: 'error', step: 0, message, mode: 'first' })
+    }
+  }
+
+  const runSecondPlaytest = async () => {
+    if (connection.state !== 'connected') {
+      setConnection(current => ({ ...current, message: '请先保存 DeepSeek 密钥，再启动二轮复算。' }))
+      setSettingsOpen(true)
+      return
+    }
+    if (lab.fixes.length === 0) return
+
+    const startedAt = Date.now()
+    setAnalysisRun({ state: 'running', step: 0, message: '正在载入 V1.1 修改内容…', mode: 'second' })
+    const progressTimer = window.setInterval(() => {
+      setAnalysisRun(current => current.state === 'running' && current.mode === 'second'
+        ? { ...current, step: Math.min(current.step + 1, secondAnalysisSteps.length - 2) }
+        : current)
+    }, 1100)
+
+    try {
+      const revisions = activeSimulation.findings
+        .filter(finding => lab.fixes.includes(finding.id))
+        .map(finding => ({
+          findingId: finding.id,
+          event: finding.event,
+          impact: finding.impact,
+          originalSuggestion: finding.suggestion,
+          revision: lab.revisionDrafts[finding.id] || finding.suggestion,
+        }))
+      const response = await fetch('/api/deepseek/retest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: deepSeekModel,
+          inputs: lab.inputs,
+          writerNote: lab.writerNote,
+          executionConstraints: lab.executionConstraints,
+          firstSimulation: activeSimulation,
+          revisions,
+        }),
+      })
+      const result = await response.json() as { ok?: boolean; message?: string; result?: SecondTestResult; usage?: SecondTestResult['usage'] }
+      if (!response.ok || !result.ok || !result.result) throw new Error(result.message || '二轮复算没有完成，请重试。')
+
+      const remaining = Math.max(0, 2800 - (Date.now() - startedAt))
+      if (remaining) await new Promise(resolve => window.setTimeout(resolve, remaining))
+      window.clearInterval(progressTimer)
+      setAnalysisRun({ state: 'running', step: secondAnalysisSteps.length - 1, message: '二轮复算完成，正在写入 V1.1…', mode: 'second' })
+      updateLab({ secondTest: { ...result.result, usage: result.usage }, secondTestDone: true })
+      window.setTimeout(() => {
+        setAnalysisRun({ state: 'idle', step: 0, message: '', mode: 'second' })
+        go(4)
+      }, 650)
+    } catch (error) {
+      window.clearInterval(progressTimer)
+      const message = error instanceof Error ? error.message : '二轮复算没有完成，请稍后重试。'
+      if (message.includes('密钥')) setConnection({ state: 'idle', message: '保存的密钥已失效，请重新设置。' })
+      setAnalysisRun({ state: 'error', step: 0, message, mode: 'second' })
     }
   }
 
@@ -511,6 +603,12 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       `创作基线版本：V1.0`,
       `验证后版本：${lab.secondTestDone ? 'V1.1' : '尚未运行二次验证'}`,
       `验证后成熟度：${secondScore}`,
+      ...(lab.secondTest ? [
+        `二轮复跑路线：${lab.secondTest.rerunPaths}`,
+        `二轮模型结论：${lab.secondTest.verdict}`,
+        `二轮结果摘要：${lab.secondTest.summary}`,
+        ...lab.secondTest.routes.map(route => `- [${route.status}] ${route.title}：${route.evidence}`),
+      ] : []),
       `二轮结论：${readyForTabletop ? `建议进入 ${lab.inputs.people} 人真人桌面试玩，不直接进入完整实景。` : '仍有关键问题未修复，暂不进入真人试玩。'}`,
       '',
       '已纳入 V1.1 的编剧与执行修改：',
@@ -518,7 +616,7 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
       '',
       '仍需真人验证：23:17 谜题难度、隐藏角色平衡、听证时长、真实动线、机关手感与安全。',
       '',
-      `说明：首轮行为结果和诊断依据${lab.analysis ? '来自本轮模型分析' : '当前使用演示样本'}；平面图和二轮评分仍为交互原型，需要编剧、导演与真人试玩验证。`,
+      `说明：首轮行为结果和诊断依据${lab.analysis ? '来自本轮模型分析' : '当前使用演示样本'}；${lab.secondTest ? '二轮评分来自模型对 V1.1 的独立复算' : '尚未形成二轮模型复算结果'}，仍需编剧、导演与真人试玩验证。`,
     ].join('\n')
     const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
@@ -716,8 +814,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
             <p>编剧意图优先，执行限制只约束落地方式。</p>
           </div>
           <div className="lab-revision-brief-fields">
-            <div className="lab-revision-field"><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false })} /></div>
-            <div className="lab-revision-field"><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false })} /></div>
+            <div className="lab-revision-field"><label className="lab-field-label"><BrainCircuit size={15} />编剧总方向</label><textarea rows={3} placeholder="例如：保留调包者的道德灰度，不允许系统把结局改成单一抓凶。" value={lab.writerNote} onChange={event => updateLab({ writerNote: event.target.value, secondTestDone: false, secondTest: undefined })} /></div>
+            <div className="lab-revision-field"><label className="lab-field-label"><Layers3 size={15} />执行与场地边界</label><textarea rows={3} placeholder="场地层数、面积、预算等级、不可改造区域、消防或机关限制。" value={lab.executionConstraints} onChange={event => updateLab({ executionConstraints: event.target.value, secondTestDone: false, secondTest: undefined })} /></div>
           </div>
         </Panel>
         <div className="lab-revision-section-title">
@@ -739,22 +837,32 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               <div className="lab-revision-card-footer"><span>{active ? '将进入 V1.1 二次验证' : '当前不改变原始版本'}</span><button type="button" className={`lab-review-button ${active ? 'lab-review-button-active' : ''}`} onClick={() => toggleFix(finding.id)}>{active ? <Check size={13} /> : <ArrowRight size={13} />}{active ? '已纳入 V1.1' : '纳入修改'}</button></div>
             </section>
           })}</div>
-          <Panel className="lab-revision-summary"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="lab-revision-score"><div><strong>{firstScore}</strong><p>V1.0 基线</p></div><ArrowRight /><div><strong>{lab.secondTestDone ? secondScore : '—'}</strong><p>V1.1 验证后</p></div></div><div className="lab-revision-progress"><span style={{ width: `${Math.min(100, lab.fixes.length / Math.max(1, activeSimulation.findings.length) * 100)}%` }} /></div><p className="lab-revision-summary-copy">已纳入 <strong>{lab.fixes.length}</strong> / {activeSimulation.findings.length} 项。只有重新运行受影响路线后，评分和最终结论才会更新。</p><button type="button" className="lab-primary-button w-full justify-center" disabled={lab.fixes.length === 0} onClick={() => updateLab({ secondTestDone: true })}><RefreshCw size={15} />运行二次模拟试玩</button>{lab.secondTestDone && <div className="lab-revision-complete"><CheckCircle2 size={14} />已重跑 {lab.fixes.length + 3} 条受影响路线，结果已写入 V1.1。</div>}</Panel>
+          <Panel className="lab-revision-summary"><p className="text-[10px] tracking-[.16em] text-white/40">VERSION EVIDENCE</p><div className="lab-revision-score"><div><strong>{firstScore}</strong><p>V1.0 基线</p></div><ArrowRight /><div><strong>{lab.secondTestDone ? secondScore : '—'}</strong><p>V1.1 模型复算</p></div></div><div className="lab-revision-progress"><span style={{ width: `${Math.min(100, lab.fixes.length / Math.max(1, activeSimulation.findings.length) * 100)}%` }} /></div><p className="lab-revision-summary-copy">已纳入 <strong>{lab.fixes.length}</strong> / {activeSimulation.findings.length} 项。模型会重新读取原始规则与修改稿，只复跑受影响路线，并检查新增风险。</p><button type="button" className="lab-primary-button w-full justify-center" disabled={lab.fixes.length === 0 || analysisRun.state === 'running'} onClick={() => void runSecondPlaytest()}><RefreshCw size={15} />{connection.state === 'connected' ? '启动 AI 二轮复算' : '连接模型后复算'}</button>{lab.secondTestDone && lab.secondTest && <div className="lab-revision-complete"><CheckCircle2 size={14} />模型已复跑 {lab.secondTest.rerunPaths} 条受影响路线，结果已写入 V1.1。</div>}</Panel>
         </div>
       </>
     )
 
     if (lab.step === 4) return (
       <>
-        <StageHeading eyebrow="05 / SECOND PLAYTEST" title={readyForTabletop ? '二轮模拟通过，进入真人验证' : '二轮仍有阻断问题'} copy="对比编剧修改前后的行为变化、问题消除情况和新增风险。AI提供推进依据，但不替代编剧和导演的最终判断。" />
+        <StageHeading eyebrow="05 / SECOND PLAYTEST" title={lab.secondTest?.verdict || (readyForTabletop ? '二轮模拟通过，进入真人验证' : '二轮仍有阻断问题')} copy={lab.secondTest?.summary || '对比编剧修改前后的行为变化、问题消除情况和新增风险。AI提供推进依据，但不替代编剧和导演的最终判断。'} />
         <div className="lab-metric-grid">
-          {[[String(secondScore), 'V1.1 成熟度', `较基线 +${secondScore - firstScore}`], [`${Math.min(98, activeSimulation.coverage + 5)}%`, '证据覆盖率', '含首轮与二次模拟'], [String(remainingBlockers), '剩余 P0', remainingBlockers === 0 ? '已清除' : '阻断推进'], [String(lab.fixes.length), '编剧修改项', '已写入 V1.1']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index === 2 && !readyForTabletop ? 'text-[#ffab8d]' : ''}>{value}</strong><small>{note}</small></Panel>)}
+          {[[String(secondScore), 'V1.1 综合评分', `${secondScore >= firstScore ? '较首轮 +' : '较首轮 '}${secondScore - firstScore}`], [String(lab.secondTest?.rerunPaths || 0), '模型复跑路线', '受影响与相邻替代路径'], [String(remainingBlockers), '剩余阻断', remainingBlockers === 0 ? '本轮未发现 P0' : '仍会影响推进'], [String(lab.secondTest?.newRisks.length || 0), '新增风险', '由修改引起的新问题']].map(([value, label, note], index) => <Panel className="lab-metric-card" key={label}><span>{label}</span><strong className={index >= 2 && Number(value) > 0 ? 'text-[#b45937]' : ''}>{value}</strong><small>{note}</small></Panel>)}
         </div>
-        <div className="mt-4 grid gap-4 xl:grid-cols-[.78fr_1.22fr]">
-          <Panel><div className="flex items-center gap-2"><Activity size={16} className="text-[#9ce2e8]" /><h2 className="text-sm font-semibold">结构质量与验证结果</h2></div><div className="mt-6 space-y-4">{scoreRows.map(([label, before, target]) => <ScoreBar label={String(label)} value={Number(before)} after={lab.secondTestDone ? dimensionAfter(String(label), Number(before), Number(target)) : undefined} key={String(label)} />)}</div><p className="mt-6 text-[11px] leading-5 text-white/40">每项结果由规则检查、模拟路径和编剧确认共同构成；点击式修改不会直接提高分数。</p></Panel>
+        <div className="mt-4 grid items-start gap-4 xl:grid-cols-[.78fr_1.22fr]">
+          <Panel className="lab-quality-panel">
+            <div className="lab-quality-header"><div className="flex items-center gap-2"><Activity size={16} /><h2>结构质量与验证结果</h2></div><span>模型复算</span></div>
+            <div className="lab-quality-score-summary"><div><span>首轮</span><strong>{firstScore}</strong></div><ArrowRight /><div><span>二轮</span><strong>{secondScore}</strong></div><b>{secondScore - firstScore >= 0 ? '+' : ''}{secondScore - firstScore}</b></div>
+            <div className="mt-5 space-y-4">{scoreRows.map(([label, before]) => <ScoreBar label={String(label)} value={Number(before)} after={dimensionAfter(String(label), Number(before))} key={String(label)} />)}</div>
+            <div className="lab-validation-summary-grid">
+              <div><strong>{lab.secondTest?.rerunPaths || 0}</strong><span>复跑路线</span></div>
+              <div><strong>{lab.secondTest?.routes.filter(route => route.status === '已解决').length || 0}</strong><span>已解决</span></div>
+              <div><strong>{remainingBlockers + (lab.secondTest?.newRisks.length || 0)}</strong><span>仍需处理</span></div>
+            </div>
+            <p className="lab-quality-note">{lab.secondTest?.summary || '每项结果由模型对修改后规则和受影响路线重新计算，点击式修改不会直接提高分数。'}</p>
+          </Panel>
           <div className="space-y-4">
-            <Panel><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">VERSION DIFFERENCE</p><h2 className="mt-1 text-sm font-semibold">V1.0 → V1.1 修改证据</h2></div><span className="lab-tag">{lab.fixes.length} 项变更</span></div>{lab.fixes.length > 0 ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{activeSimulation.findings.filter(finding => lab.fixes.includes(finding.id)).map(finding => <div className="lab-version-change" key={finding.id}><CheckCircle2 size={15} /><div><strong>{finding.actor} · {finding.time}</strong><p>{lab.revisionDrafts[finding.id]}</p></div></div>)}</div> : <p className="mt-5 text-sm text-white/45">尚未形成 V1.1。返回“编剧修改”编辑真实内容并重新验证。</p>}</Panel>
-            <Panel><div className="flex items-center gap-2"><Route size={16} className="text-[#efb876]" /><h2 className="text-sm font-semibold">仍需真人验证</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{['23:17 谜题难度是否适中', '调包者隐藏目标是否平衡', '集中判断阶段是否过长', '真实楼层动线是否自然', '机关手感、故障率与安全', '现场演员对异常情况的恢复能力'].map(item => <div className="lab-human-check" key={item}><span /><p>{item}</p></div>)}</div></Panel>
+            <Panel><div className="flex items-center justify-between gap-4"><div><p className="text-[10px] tracking-[.16em] text-white/40">MODEL RETEST EVIDENCE</p><h2 className="mt-1 text-sm font-semibold">V1.0 → V1.1 模型复测证据</h2></div><span className="lab-tag">{lab.secondTest?.routes.length || 0} 条结果</span></div>{lab.secondTest?.routes.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{lab.secondTest.routes.map(route => <div className={`lab-version-change lab-retest-route lab-retest-${route.status}`} key={`${route.findingId}-${route.title}`}><CheckCircle2 size={15} /><div><span>{route.status}</span><strong>{route.title}</strong><p>{route.evidence}</p></div></div>)}</div> : <p className="mt-5 text-sm text-white/45">尚未形成 V1.1 模型复测证据。返回“编剧修改”启动二轮复算。</p>}</Panel>
+            <Panel><div className="flex items-center gap-2"><Route size={16} className="text-[#a6633d]" /><h2 className="text-sm font-semibold">仍需真人验证</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-2">{(lab.secondTest?.humanChecks.length ? lab.secondTest.humanChecks : ['谜题难度是否适中', '隐藏目标是否平衡', '真实动线是否自然', '机关手感、故障率与安全']).map(item => <div className="lab-human-check" key={item}><span /><p>{item}</p></div>)}</div></Panel>
             <Panel className={readyForTabletop ? 'ring-1 ring-[#8fd8df]/50' : 'ring-1 ring-[#ef8b66]/35'}><div className="flex items-center justify-between gap-5"><div><p className="text-[10px] tracking-[.16em] text-white/40">NEXT GATE</p><p className="mt-2 text-base font-semibold">{readyForTabletop ? `${lab.inputs.people} 人真人桌面试玩，不直接进入完整实景` : '返回编剧修改，处理 P0 并重新运行二次模拟'}</p></div><CheckCircle2 className={readyForTabletop ? 'text-[#9ce2e8]' : 'text-[#ef8b66]'} /></div></Panel>
             <div className="flex flex-wrap gap-3"><button type="button" className="lab-primary-button" onClick={exportReport}><Download size={15} />下载决策报告</button><button type="button" className="lab-secondary-button" onClick={reset}><RefreshCw size={15} />重新开始</button></div>
           </div>
@@ -780,6 +888,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
     next()
   }
   const nextDisabled = analysisRun.state === 'running' || (lab.step === 3 && !lab.secondTestDone)
+  const activeRunSteps = analysisRun.mode === 'second' ? secondAnalysisSteps : analysisSteps
+  const activeRunMetrics = analysisRun.mode === 'second' ? secondAnalysisMetrics : analysisMetrics
 
   return (
     <main className="lab-shell min-h-[100svh] text-white">
@@ -863,19 +973,19 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
               <>
                 <div className="lab-analysis-dashboard-header">
                   <div className="lab-analysis-orbit" aria-hidden="true"><BrainCircuit size={24} /></div>
-                  <div><p className="lab-settings-kicker">AI SIMULATION ENGINE</p><h2 id="analysis-progress-title">AI 首轮模拟正在运行</h2><p className="lab-analysis-message">{analysisRun.message || '正在把创作材料转换为可运行的结构模型。'}</p></div>
-                  <div className="lab-analysis-progress-number"><strong>{Math.round(((analysisRun.step + 1) / analysisSteps.length) * 100)}%</strong><span>分析进度</span></div>
+                  <div><p className="lab-settings-kicker">AI SIMULATION ENGINE</p><h2 id="analysis-progress-title">{analysisRun.mode === 'second' ? 'AI 二轮复算正在运行' : 'AI 首轮模拟正在运行'}</h2><p className="lab-analysis-message">{analysisRun.message || (analysisRun.mode === 'second' ? '正在把 V1.1 修改重新写入行为模型。' : '正在把创作材料转换为可运行的结构模型。')}</p></div>
+                  <div className="lab-analysis-progress-number"><strong>{Math.round(((analysisRun.step + 1) / activeRunSteps.length) * 100)}%</strong><span>分析进度</span></div>
                 </div>
-                <div className="lab-analysis-progress-track"><span style={{ width: `${((analysisRun.step + 1) / analysisSteps.length) * 100}%` }} /></div>
+                <div className="lab-analysis-progress-track"><span style={{ width: `${((analysisRun.step + 1) / activeRunSteps.length) * 100}%` }} /></div>
                 <div className="lab-engine-grid">
-                  {analysisSteps.map(([title, copy], index) => {
+                  {activeRunSteps.map(([title, copy], index) => {
                     const EngineIcon = [FileText, Users, LockKeyhole, BrainCircuit, Route, AlertTriangle][index]
                     const state = index < analysisRun.step ? 'is-complete' : index === analysisRun.step ? 'is-active' : ''
                     return (
                       <div className={`lab-engine-card ${state}`} key={title}>
                         <div className="lab-engine-icon"><EngineIcon size={17} /></div>
                         <div><span>{String(index + 1).padStart(2, '0')}</span><strong>{title}</strong><p>{copy}</p></div>
-                        <small>{index < analysisRun.step ? analysisMetrics[index] : index === analysisRun.step ? '正在计算…' : '等待前序数据'}</small>
+                        <small>{index < analysisRun.step ? activeRunMetrics[index] : index === analysisRun.step ? '正在计算…' : '等待前序数据'}</small>
                       </div>
                     )
                   })}
@@ -889,8 +999,8 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
                 <h2 id="analysis-progress-title">本轮分析没有完成</h2>
                 <p>{analysisRun.message}</p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  <button type="button" className="lab-primary-button" onClick={() => void runDeepSeekAnalysis()}>重新分析</button>
-                  <button type="button" className="lab-secondary-button" onClick={() => setAnalysisRun({ state: 'idle', step: 0, message: '' })}>返回修改输入</button>
+                  <button type="button" className="lab-primary-button" onClick={() => void (analysisRun.mode === 'second' ? runSecondPlaytest() : runDeepSeekAnalysis())}>{analysisRun.mode === 'second' ? '重新复算' : '重新分析'}</button>
+                  <button type="button" className="lab-secondary-button" onClick={() => setAnalysisRun({ state: 'idle', step: 0, message: '', mode: analysisRun.mode })}>返回修改</button>
                 </div>
               </div>
             )}

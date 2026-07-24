@@ -38,6 +38,19 @@ type PlayerRun = {
   status: '阻断' | '风险' | '通过'
 }
 
+type RetestDimension = {
+  label: string
+  score: number
+  evidence: string
+}
+
+type RetestRoute = {
+  findingId: string
+  title: string
+  status: '已解决' | '仍存在' | '新增风险'
+  evidence: string
+}
+
 const cookieName = 'deepseek_admin_session'
 const cookieMaxAge = 60 * 60 * 24 * 30
 const allowedModels = new Set(['deepseek-v4-pro', 'deepseek-v4-flash'])
@@ -248,6 +261,59 @@ function parseAnalysis(value: unknown) {
   return { summary, insights, questions, v1, simulation }
 }
 
+function parseRetest(value: unknown) {
+  if (!value || typeof value !== 'object') throw new Error('Invalid retest')
+  const raw = value as Record<string, unknown>
+  const dimensionLabels = new Set(['规则完整性', '线索闭环', '角色参与', '空间动线', '节奏体验', '执行可行', '拍摄安全'])
+  const dimensions = (Array.isArray(raw.dimensions) ? raw.dimensions : [])
+    .slice(0, 7)
+    .map((item): RetestDimension => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      return {
+        label: cleanText(row.label, 40),
+        score: Math.max(1, Math.min(100, Number(row.score) || 1)),
+        evidence: cleanText(row.evidence, 600),
+      }
+    })
+    .filter(item => dimensionLabels.has(item.label) && item.evidence)
+  const routes = (Array.isArray(raw.routes) ? raw.routes : [])
+    .slice(0, 12)
+    .map((item): RetestRoute => {
+      const row = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      const statusText = cleanText(row.status, 20)
+      return {
+        findingId: cleanText(row.findingId, 60),
+        title: cleanText(row.title, 180),
+        status: statusText === '已解决' || statusText === '新增风险' ? statusText : '仍存在',
+        evidence: cleanText(row.evidence, 800),
+      }
+    })
+    .filter(item => item.title && item.evidence)
+  const newRisks = (Array.isArray(raw.newRisks) ? raw.newRisks : [])
+    .map(item => cleanText(item, 400))
+    .filter(Boolean)
+    .slice(0, 6)
+  const humanChecks = (Array.isArray(raw.humanChecks) ? raw.humanChecks : [])
+    .map(item => cleanText(item, 300))
+    .filter(Boolean)
+    .slice(0, 6)
+  const result = {
+    score: Math.max(1, Math.min(100, Number(raw.score) || 1)),
+    verdict: cleanText(raw.verdict, 180),
+    summary: cleanText(raw.summary, 900),
+    rerunPaths: Math.max(1, Math.min(999, Number(raw.rerunPaths) || 1)),
+    remainingBlockers: Math.max(0, Math.min(99, Number(raw.remainingBlockers) || 0)),
+    newRisks,
+    dimensions,
+    routes,
+    humanChecks,
+  }
+  if (!result.verdict || !result.summary || dimensions.length < 6 || routes.length < 1 || humanChecks.length < 3) {
+    throw new Error('Incomplete retest')
+  }
+  return result
+}
+
 export default {
   async fetch(request: Request, env: Env) {
     const url = new URL(request.url)
@@ -292,6 +358,138 @@ export default {
         200,
         { 'Set-Cookie': `${cookieName}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0` },
       )
+    }
+
+    if (url.pathname === '/api/deepseek/retest') {
+      if (request.method !== 'POST') return json({ ok: false, message: '请求方式不支持。' }, 405)
+      if (!sameOrigin(request)) return json({ ok: false, message: '请求来源不被允许。' }, 403)
+      const apiKey = await savedApiKey(request, env)
+      if (!apiKey) return json({ ok: false, message: '请先在模型设置中保存 DeepSeek 密钥。' }, 401)
+
+      try {
+        const body = await request.json() as {
+          model?: string
+          inputs?: {
+            story?: string
+            rules?: string
+            people?: string
+            duration?: string
+            characters?: Array<{ name?: string; profile?: string }>
+          }
+          writerNote?: string
+          executionConstraints?: string
+          firstSimulation?: {
+            verdict?: string
+            headline?: string
+            score?: number
+            findings?: Array<Record<string, unknown>>
+            playerRuns?: Array<Record<string, unknown>>
+            timeline?: Array<Record<string, unknown>>
+          }
+          revisions?: Array<{
+            findingId?: string
+            event?: string
+            impact?: string
+            originalSuggestion?: string
+            revision?: string
+          }>
+        }
+        const model = allowedModels.has(body.model || '') ? body.model! : 'deepseek-v4-pro'
+        const input = {
+          story: cleanText(body.inputs?.story, 30000),
+          rules: cleanText(body.inputs?.rules, 20000),
+          people: cleanText(body.inputs?.people, 100),
+          duration: cleanText(body.inputs?.duration, 100),
+          characters: (Array.isArray(body.inputs?.characters) ? body.inputs.characters : [])
+            .slice(0, 20)
+            .map(character => ({
+              name: cleanText(character?.name, 100),
+              profile: cleanText(character?.profile, 1200),
+            })),
+          writerNote: cleanText(body.writerNote, 10000),
+          executionConstraints: cleanText(body.executionConstraints, 10000),
+          firstSimulation: {
+            verdict: cleanText(body.firstSimulation?.verdict, 180),
+            headline: cleanText(body.firstSimulation?.headline, 800),
+            score: Math.max(1, Math.min(100, Number(body.firstSimulation?.score) || 1)),
+            findings: (Array.isArray(body.firstSimulation?.findings) ? body.firstSimulation.findings : []).slice(0, 10),
+            playerRuns: (Array.isArray(body.firstSimulation?.playerRuns) ? body.firstSimulation.playerRuns : []).slice(0, 10),
+            timeline: (Array.isArray(body.firstSimulation?.timeline) ? body.firstSimulation.timeline : []).slice(0, 10),
+          },
+          revisions: (Array.isArray(body.revisions) ? body.revisions : [])
+            .slice(0, 10)
+            .map(revision => ({
+              findingId: cleanText(revision.findingId, 60),
+              event: cleanText(revision.event, 800),
+              impact: cleanText(revision.impact, 600),
+              originalSuggestion: cleanText(revision.originalSuggestion, 800),
+              revision: cleanText(revision.revision, 2000),
+            }))
+            .filter(revision => revision.findingId && revision.revision),
+        }
+        if (!input.story) return json({ ok: false, message: '请先填写故事详情。' }, 400)
+        if (!input.revisions.length) return json({ ok: false, message: '请先选择至少一项编剧修改。' }, 400)
+
+        const response = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content: `你是服务专业编剧和导演部门的 AI 二轮模拟验证器。你需要把 V1.1 编剧修改重新写入原始故事、规则与角色模型，复跑所有直接受影响的玩家路线，并补跑相邻替代路线以检查修改是否造成新问题。
+
+请只输出合法 JSON，不要 Markdown。结构必须为：
+{"score":84,"verdict":"一句话推进结论","summary":"说明二轮最重要的行为变化、仍存问题和推进建议","rerunPaths":18,"remainingBlockers":0,"newRisks":["修改后出现的新风险"],"dimensions":[{"label":"规则完整性","score":88,"evidence":"具体复算依据"},{"label":"线索闭环","score":90,"evidence":"具体复算依据"},{"label":"角色参与","score":84,"evidence":"具体复算依据"},{"label":"空间动线","score":85,"evidence":"具体复算依据"},{"label":"节奏体验","score":84,"evidence":"具体复算依据"},{"label":"执行可行","score":86,"evidence":"具体复算依据"},{"label":"拍摄安全","score":84,"evidence":"具体复算依据"}],"routes":[{"findingId":"首轮问题 id；新增风险可写 new-risk-1","title":"复跑的具体问题或路线","status":"已解决|仍存在|新增风险","evidence":"修改写入后，哪类玩家在什么阶段采取什么行为，产生什么结果"}],"humanChecks":["仍必须由真人验证的具体事项"]}
+
+硬性规则：
+1. 修改稿只是待验证方案，不能因为用户勾选了修改就自动判定问题解决。
+2. score 必须独立复算，允许与首轮相同或下降；禁止机械加分。
+3. routes 必须覆盖每个 revisions.findingId，并明确写出已解决、仍存在或转移后的结果；如果发现新问题，增加 status 为“新增风险”的路线。
+4. dimensions 必须恰好使用这七个名称：规则完整性、线索闭环、角色参与、空间动线、节奏体验、执行可行、拍摄安全。每项 evidence 都必须是本轮可复查证据。
+5. rerunPaths 必须是本轮实际复跑的受影响路线和相邻替代路线总数。
+6. remainingBlockers 只统计仍会造成无法推进、规则绕过或提前结束的 P0 问题。
+7. humanChecks 输出 3 至 6 项模型无法替代真人判断的体验、场地、机关或表演验证。
+8. 不评价编剧创作水平，不替编剧决定主题或人物价值判断。`,
+              },
+              {
+                role: 'user',
+                content: `请对以下 V1.1 修改运行二轮模拟复算并输出结构化结果：\n${JSON.stringify(input)}`,
+              },
+            ],
+            thinking: { type: 'enabled' },
+            reasoning_effort: 'high',
+            response_format: { type: 'json_object' },
+            max_tokens: 5000,
+            stream: false,
+          }),
+        })
+        if (!response.ok) return json({ ok: false, message: providerMessage(response.status) }, response.status === 401 ? 401 : 502)
+
+        const providerResult = await response.json() as {
+          choices?: Array<{ message?: { content?: string } }>
+          usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+        }
+        const content = providerResult.choices?.[0]?.message?.content?.trim()
+        if (!content) return json({ ok: false, message: 'DeepSeek 返回了空结果，请重试一次。' }, 502)
+        const parsed = JSON.parse(content.replace(/^```json\s*/i, '').replace(/\s*```$/, ''))
+        const result = parseRetest(parsed)
+        return json({
+          ok: true,
+          result,
+          usage: {
+            prompt_tokens: providerResult.usage?.prompt_tokens || 0,
+            completion_tokens: providerResult.usage?.completion_tokens || 0,
+            total_tokens: providerResult.usage?.total_tokens || 0,
+          },
+        })
+      } catch {
+        return json({ ok: false, message: '二轮复算结果没有形成完整结构，请重试一次。' }, 502)
+      }
     }
 
     if (url.pathname === '/api/deepseek/analyze') {
