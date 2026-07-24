@@ -371,6 +371,9 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
   }
   const go = (nextStep: number) => setLab(current => ({ ...current, step: nextStep, maxVisited: Math.max(current.maxVisited, nextStep) }))
   const next = () => go(Math.min(lab.step + 1, stages.length - 1))
+  const scrollToResult = (targetId: string) => {
+    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
   const activeInsights = lab.analysis?.insights?.length ? lab.analysis.insights : demoInsights
   const activeQuestions = lab.analysis?.questions?.length ? lab.analysis.questions : demoQuestions
   const activeV1 = lab.analysis?.v1 || demoV1
@@ -588,10 +591,10 @@ export default function ReasoningLab({ onBack }: { onBack: () => void }) {
         </Panel>
 
         <div className="lab-result-nav-grid mt-4">
-          <a className="lab-result-link-card" href="#playtest-findings"><div><Route size={15} /><span>关键事件</span></div><strong>{activeSimulation.findings.length}<small>项</small></strong><p>查看发生时间、玩家行为和实际影响</p><b>查看事件 <ArrowRight size={13} /></b></a>
-          <a className="lab-result-link-card lab-result-link-card-alert" href={blockerFindings.length > 0 ? '#playtest-blockers' : '#playtest-findings'}><div><AlertTriangle size={15} /><span>必须先修</span></div><strong>{blockerFindings.length}<small>项</small></strong><p>直达会造成卡关或提前结束的问题</p><b>定位问题 <ArrowRight size={13} /></b></a>
-          <a className="lab-result-link-card" href="#playtest-timeline"><div><Clock3 size={15} /><span>时间线</span></div><strong>{activeSimulation.timeline.length}<small>个节点</small></strong><p>查看问题具体发生在试玩的哪个阶段</p><b>查看时间线 <ArrowRight size={13} /></b></a>
-          <a className="lab-result-link-card" href="#playtest-players"><div><Users size={15} /><span>玩家表现</span></div><strong>{activeSimulation.playerRuns.length}<small>类</small></strong><p>逐类查看行为选择、结果与阻断状态</p><b>查看玩家结果 <ArrowRight size={13} /></b></a>
+          <button type="button" className="lab-result-link-card" onClick={() => scrollToResult('playtest-findings')}><span className="lab-result-link-head"><Route size={15} /><span>关键事件</span></span><strong>{activeSimulation.findings.length}<small>项</small></strong><p>查看发生时间、玩家行为和实际影响</p><b>查看事件 <ArrowRight size={13} /></b></button>
+          <button type="button" className="lab-result-link-card lab-result-link-card-alert" onClick={() => scrollToResult(blockerFindings.length > 0 ? 'playtest-blockers' : 'playtest-findings')}><span className="lab-result-link-head"><AlertTriangle size={15} /><span>必须先修</span></span><strong>{blockerFindings.length}<small>项</small></strong><p>直达会造成卡关或提前结束的问题</p><b>定位问题 <ArrowRight size={13} /></b></button>
+          <button type="button" className="lab-result-link-card" onClick={() => scrollToResult('playtest-timeline')}><span className="lab-result-link-head"><Clock3 size={15} /><span>时间线</span></span><strong>{activeSimulation.timeline.length}<small>个节点</small></strong><p>查看问题具体发生在试玩的哪个阶段</p><b>查看时间线 <ArrowRight size={13} /></b></button>
+          <button type="button" className="lab-result-link-card" onClick={() => scrollToResult('playtest-players')}><span className="lab-result-link-head"><Users size={15} /><span>玩家表现</span></span><strong>{activeSimulation.playerRuns.length}<small>类</small></strong><p>逐类查看行为选择、结果与阻断状态</p><b>查看玩家结果 <ArrowRight size={13} /></b></button>
         </div>
 
         <div id="playtest-findings" className="lab-result-anchor">
